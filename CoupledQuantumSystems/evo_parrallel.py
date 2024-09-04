@@ -1,10 +1,10 @@
-from utils_v2_for_gfIFQ.utils_coupled_systems import CoupledSystem
+from systems import CoupledSystem
 import concurrent
 from loky import get_reusable_executor
 from typing import List, Any
-from utils_v2_for_gfIFQ.utils_basic_funcs import *
-from utils_v2_for_gfIFQ.utils_DriveTerm import *
-from utils_v2_for_gfIFQ.utils_evo import ODEsolve_and_post_process   
+from qobj_manip import *
+from drive import *
+from evo import ODEsolve_and_post_process   
 
 def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
         list_of_systems: List[CoupledSystem],

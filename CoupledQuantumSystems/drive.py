@@ -14,28 +14,39 @@ import qutip
 class DriveTerm:
     '''
     This class provides a wrapper around pulse_shape_func since qutip doesn't accept duplicate keys in args.
+    When there is multiple pulse with of same pulse_shape_func, pulse_id can be used to distinguish between different pulses.
     '''
     driven_op: qutip.Qobj
     pulse_shape_func: Callable
-    pulse_id: str
-    pulse_shape_args_without_id: Dict[str, float]
+    pulse_shape_args: Dict[str, float]
 
+    pulse_id: str = None
     pulse_shape_func_with_id: Callable = field(init=False)
     pulse_shape_args_with_id: Dict[str, float] = field(init=False)
     
     def __post_init__(self):
+        if self.pulse_id != None:
+            assert len(self.pulse_id)>0, 'cannot use pulse_id with zero length'
         self.pulse_shape_func_with_id = self.generate_pulse_shape_func_with_id()
-        self.pulse_shape_args_with_id = self.modify_args_with_id(self.pulse_shape_args_without_id)
+        self.pulse_shape_args_with_id = self.modify_args_with_id(self.pulse_shape_args)
 
     def modify_args_with_id(self, pulse_shape_args: Dict[str, float]) -> Dict[str, float]:
-        return {f"{key}{self.pulse_id}": value for key, value in pulse_shape_args.items()}
-
+        if self.pulse_id != None:
+            return {f"{key}{self.pulse_id}": value for key, value in pulse_shape_args.items()}
+        else:
+            return {f"{key}": value for key, value in pulse_shape_args.items()}
+        
     def generate_pulse_shape_func_with_id(self) -> Callable:
         # Create a wrapper to handle the modified args
         def wrapper(t, args={}):
             try:
-                unmodified_args = {key[:-len(self.pulse_id)]: value for key, value in args.items() if key.endswith(self.pulse_id)}
-                return self.pulse_shape_func(t, unmodified_args)
+                if self.pulse_id != None:
+                    # remove the id from the args that contain id, and then call the original function
+                    unmodified_args = {key[:-len(self.pulse_id)]: value for key, value in args.items() if key.endswith(self.pulse_id)}
+                    return self.pulse_shape_func(t, unmodified_args)
+                else:
+                    return self.pulse_shape_func(t, args)
+                
             except KeyError as e:
                 raise KeyError(f"Missing argument key for pulse_id {self.pulse_id}: {e}")
             except Exception as e:
@@ -55,11 +66,14 @@ class DriveTerm:
         return self.pulse_shape_args_with_id
     
     def set_pulse_shape_arg_val_without_id(self,key,value):
-        self.pulse_shape_args_with_id[f"{key}{self.pulse_id}"] = value
+        if self.pulse_id != None:
+            self.pulse_shape_args_with_id[f"{key}{self.pulse_id}"] = value
+        else:
+            self.pulse_shape_args_with_id[f"{key}"] = value
     
     def visualize(self,ax,tlist,args):
         ax.plot(tlist, self.pulse_shape_func_with_id(tlist,args),label = self.pulse_id)
-        ax.text(tlist[int(len(tlist)/3)], 2*np.pi* 0.99* self.pulse_shape_args_without_id['amp'],f"{self.pulse_id} freq: {self.pulse_shape_args_without_id['w_d']}")
+        ax.text(tlist[int(len(tlist)/3)], 2*np.pi* 0.99* self.pulse_shape_args['amp'],f"{self.pulse_id} freq: {self.pulse_shape_args['w_d']}")
 
 def square_pulse_with_rise_fall(t,
                                 args = {}):
@@ -131,7 +145,6 @@ def gaussian_pulse(t, args={}):
             pulse_value = (pulse_value - a) / (1 - a)
         return pulse_value
     
-
 def STIRAP_with_modulation(t,args = {}):
     # Symmetric Rydberg controlled-𝑍 gates with adiabatic pulses M. Saffman, I. I. Beterov, A. Dalal, E. J. Páez, and B. C. Sanders Phys. Rev. A 101, 062309 – Published 3 June 2020
     # Optimum pulse shapes for stimulated Raman adiabatic passage Phys. Rev. A 80, 013417 G. S. Vasilev, A. Kuhn, and N. V. Vitanov 2009
