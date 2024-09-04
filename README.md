@@ -1,2 +1,2 @@
 # CoupledQuantumSystems
-Abstract the concepts in dealing with coupled systems (particularly fluxonium)
+Abstract and facilitate the common workflows in dealing with coupled systems (particularly fluxonium)
