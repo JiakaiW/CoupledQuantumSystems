@@ -4,7 +4,8 @@ import numpy as np
 import gzip
 from dataclasses import dataclass
 from typing import List,Union
-from drive import *
+
+from CoupledQuantumSystems.drive import DriveTerm
 
 
 @dataclass

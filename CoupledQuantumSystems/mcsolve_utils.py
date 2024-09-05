@@ -1,8 +1,15 @@
-from mcsolve_on_node import *
+import qutip
+import numpy as np
 import pickle
 import zipfile
 import os
+from typing import List,Union
 from tqdm import tqdm
+import gzip
+
+from CoupledQuantumSystems.drive import DriveTerm
+from CoupledQuantumSystems.mcsolve_on_node import packed_mcsolve_problem
+
 
 def pack_mcsolve_chunks(
                     y0: qutip.Qobj,

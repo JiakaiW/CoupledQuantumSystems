@@ -1,10 +1,5 @@
-import itertools
-import math
-import matplotlib.pyplot as plt
 import numpy as np
 import scqubits
-import qutip
-from typing import Union,List
 from functools import partial
 
 
