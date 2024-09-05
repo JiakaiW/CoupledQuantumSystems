@@ -2,8 +2,8 @@ import os
 
 from setuptools import setup, find_namespace_packages
 
-DIST_NAME = "CoupleQuantumSystems"
-PACKAGE_NAME = "CoupleQuantumSystems"
+DIST_NAME = "CoupledQuantumSystems"
+PACKAGE_NAME = "CoupledQuantumSystems"
 
 REQUIREMENTS = [
     "numpy",

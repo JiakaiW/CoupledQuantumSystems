@@ -6,10 +6,10 @@ import numpy as np
 import qutip
 import scqubits
 from typing import List, Union, Tuple,Any
-from utils_v2_for_gfIFQ.utils_basic_funcs import *
-from utils_v2_for_gfIFQ.utils_DriveTerm import *
-from utils_v2_for_gfIFQ.utils_evo import *
-from utils_v2_for_gfIFQ.utils_noise import *
+from qobj_manip import *
+from drive import *
+from evo import *
+from noise import *
 
 '''
 The numerical study of single-qubit gates for gf-IFQ is composed of these tasks.
