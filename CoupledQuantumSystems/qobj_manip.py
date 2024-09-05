@@ -245,16 +245,16 @@ def dressed_to_product_vectorized(product_to_dressed, dressed_dm_data, sign_mult
     element_matrix = dressed_dm_submatrix * np.outer(sign_multipliers, sign_multipliers)  # Shape: (num_states, num_states)
 
     # Step 6: Prepare indices for updating rho_product using numpy
-    rho_indices = []
-
+    rho_indices1 = []
+    rho_indices2 = []
     # For each dimension of the product state, we create the corresponding indices for the first and second parts
     for dim in range(num_dims):
         idx1, idx2 = np.meshgrid(product_states[:, dim], product_states[:, dim], indexing='ij')  # First and second indices for this dimension
-        rho_indices.append(idx1)
-        rho_indices.append(idx2)
+        rho_indices1.append(idx1)
+        rho_indices2.append(idx2)
 
     # Step 7: Convert list of indices into a tuple for advanced indexing
-    rho_indices = tuple(rho_indices)  # This will now be a tuple of length `2 * num_dims`
+    rho_indices = tuple(rho_indices1+rho_indices2)  # This will now be a tuple of length `2 * num_dims`
 
     # Step 8: Use advanced indexing to update rho_product
     rho_product[rho_indices] += element_matrix
