@@ -36,7 +36,9 @@ setup(
     license="Apache 2.0",
     packages=find_namespace_packages(exclude=['notebooks']),
     install_requires=REQUIREMENTS,
-    extras_require=None,
+    extras_require={
+        'dev': ['pytest'],
+    },
     classifiers=[
         "Environment :: Console",
         "License :: OSI Approved :: Apache Software License",
