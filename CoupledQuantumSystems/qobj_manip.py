@@ -205,26 +205,26 @@ def get_product(dressed_dm,pad_back_custom,product_to_dressed,sign_multiplier):
     rho_product = qutip.Qobj(rho_product, dims=[subsystem_dims, subsystem_dims])
     return rho_product
 
-def get_product_vectorized(dressed_dm,pad_back_custom,product_to_dressed,sign_multiplier):
+def get_product_vectorized(dressed_dm,pad_back_custom,product_to_dressed,sign_multiplier_vector):
     '''
     This function converts a dressed density matrix to product basis, taking into consideration the sign difference between dressed basis and product basis.
     Here, "sign difference" means that, for almost all pacakges (scipy, numpy, jax.numpy), when computing the eigensystem, there are eigenvectors that's shaped like [0,0,-1,0,0]. 
         but when I use eigenstates as initial states, I use [0,0,1,0,0]. 
     '''
     dressed_dm_data = pad_back_custom(dressed_dm)
-    # if dressed_dm_data.shape[1] == 1:
-    #     dressed_dm_data = qutip.ket2dm(dressed_dm_data)
+    if dressed_dm_data.shape[1] == 1:
+        dressed_dm_data = qutip.ket2dm(dressed_dm_data)
     dressed_dm_data = dressed_dm_data.full() # 2d np.array
 
     subsystem_dims = [max(indexes) + 1 for indexes in zip(*product_to_dressed.keys())]
-    rho_product =dressed_to_product_vectorized(product_to_dressed, dressed_dm_data, sign_multiplier,subsystem_dims) 
+    rho_product =dressed_to_product_vectorized(product_to_dressed, dressed_dm_data, sign_multiplier_vector,subsystem_dims) 
 
     two_lvl_qbt_dm_size = np.prod(subsystem_dims)
     rho_product = rho_product.reshape((two_lvl_qbt_dm_size,two_lvl_qbt_dm_size))
     rho_product = qutip.Qobj(rho_product, dims=[subsystem_dims, subsystem_dims])
     return rho_product
 
-def dressed_to_product_vectorized(product_to_dressed, dressed_dm_data, sign_multiplier,subsystem_dims=None):
+def dressed_to_product_vectorized(product_to_dressed, dressed_dm_data, sign_multiplier_vector,subsystem_dims=None):
     if subsystem_dims is None:
         # Step 1: Get the subsystem dimensions (generalized for any number of dimensions)
         subsystem_dims = [max(indexes) + 1 for indexes in zip(*product_to_dressed.keys())]
@@ -239,7 +239,7 @@ def dressed_to_product_vectorized(product_to_dressed, dressed_dm_data, sign_mult
     
     # Step 4: Get the dressed submatrix and sign multipliers
     dressed_dm_submatrix = dressed_dm_data[np.ix_(dressed_indices, dressed_indices)]  # Shape: (num_states, num_states)
-    sign_multipliers = sign_multiplier[dressed_indices]  # Shape: (num_states,)
+    sign_multipliers = sign_multiplier_vector[dressed_indices]  # Shape: (num_states,)
     
     # Step 5: Apply sign multiplier to the dressed_dm_submatrix
     element_matrix = dressed_dm_submatrix * np.outer(sign_multipliers, sign_multipliers)  # Shape: (num_states, num_states)

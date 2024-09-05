@@ -73,6 +73,16 @@ class CoupledSystem:
         # Pre-compute the sign multiplier for each dressed index
         self.sign_multiplier = {idx: -1 if idx in dressed_idxes_with_negative_sign_set else 1
                                 for idx in self.product_to_dressed.values()}
+
+        # Pre-compute the sign multiplier for each dressed index
+        self.sign_multiplier = {idx: -1 if idx in dressed_idxes_with_negative_sign_set else 1
+                                for idx in self.product_to_dressed.values()}
+
+        max_index = max(self.sign_multiplier.keys())
+        self.sign_multiplier_vector = np.zeros(max_index + 1, dtype=int)
+        for index, sign in self.sign_multiplier.items():
+            self.sign_multiplier_vector[index] = sign
+            
         #############################################################################################
         #############################################################################################
 
