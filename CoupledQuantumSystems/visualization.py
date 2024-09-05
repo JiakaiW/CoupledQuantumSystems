@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 import qutip
 import scqubits
 from tqdm import tqdm
-from qobj_manip import *
+
+from CoupledQuantumSystems.qobj_manip import *
 
 
 ############################################################################
