@@ -117,11 +117,12 @@ class CoupledSystem:
         product_states  = []
         for state in states:
             product_states.append(get_product_vectorized(state,
-                                                         self.pad_back_custom,
+                                                         self.pad_back_function,
                                                          self.product_to_dressed,
                                                          self.sign_multiplier))
 
         return product_states
+
 
     def run_qutip_mesolve_parrallel(self,
                                     initial_states: qutip.Qobj,  # truncated initial states
@@ -174,6 +175,7 @@ class CoupledSystem:
                 results[original_index] = future.result()
 
         return results
+    
 
     def run_dq_mesolve_parrallel(self,
                                  initial_states: qutip.Qobj,  # truncated initial states
