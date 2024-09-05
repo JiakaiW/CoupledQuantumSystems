@@ -129,7 +129,7 @@ class CoupledSystem:
             product_states.append(get_product_vectorized(state,
                                                          self.pad_back_function,
                                                          self.product_to_dressed,
-                                                         self.sign_multiplier))
+                                                         self.sign_multiplier_vector))
 
         return product_states
 
