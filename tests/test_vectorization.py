@@ -43,5 +43,5 @@ def test_dressed_to_product_vectorized():
     vectorized_result = dressed_to_product_vectorized(product_to_dressed, dressed_dm_data, sign_multiplier)
     original_result = unvectorized_code(product_to_dressed, dressed_dm_data, sign_multiplier)
 
-    assert np.allclose(original_result, vectorized_result), "The results do not match!"
-
+    assert np.allclose(original_result, vectorized_result), f"The results do not match!\n{original_result}\n{vectorized_result}"
+    print('test passed')
