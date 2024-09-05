@@ -27,7 +27,7 @@ class DriveTerm:
     def __post_init__(self):
         if self.pulse_id != None:
             assert len(self.pulse_id)>0, 'cannot use pulse_id with zero length'
-        self.pulse_shape_func_with_id = self.generate_pulse_shape_func_with_id()
+        self.pulse_shape_func_with_id = self.wrapper
         self.pulse_shape_args_with_id = self.modify_args_with_id(self.pulse_shape_args)
 
     def modify_args_with_id(self, pulse_shape_args: Dict[str, float]) -> Dict[str, float]:
@@ -35,23 +35,19 @@ class DriveTerm:
             return {f"{key}{self.pulse_id}": value for key, value in pulse_shape_args.items()}
         else:
             return {f"{key}": value for key, value in pulse_shape_args.items()}
-        
-    def generate_pulse_shape_func_with_id(self) -> Callable:
-        # Create a wrapper to handle the modified args
-        def wrapper(t, args={}):
-            try:
-                if self.pulse_id != None:
-                    # remove the id from the args that contain id, and then call the original function
-                    unmodified_args = {key[:-len(self.pulse_id)]: value for key, value in args.items() if key.endswith(self.pulse_id)}
-                    return self.pulse_shape_func(t, unmodified_args)
-                else:
-                    return self.pulse_shape_func(t, args)
-                
-            except KeyError as e:
-                raise KeyError(f"Missing argument key for pulse_id {self.pulse_id}: {e}")
-            except Exception as e:
-                raise ValueError(f"Error processing pulse function for pulse_id {self.pulse_id}: {e}")
-        return wrapper
+    
+    def wrapper(self, t, args={}):
+        try:
+            if self.pulse_id is not None:
+                # Remove the id from the args that contain id, and then call the original function
+                unmodified_args = {key[:-len(self.pulse_id)]: value for key, value in args.items() if key.endswith(self.pulse_id)}
+                return self.pulse_shape_func(t, unmodified_args)
+            else:
+                return self.pulse_shape_func(t, args)
+        except KeyError as e:
+            raise KeyError(f"Missing argument key for pulse_id {self.pulse_id}: {e}")
+        except Exception as e:
+            raise ValueError(f"Error processing pulse function for pulse_id {self.pulse_id}: {e}")
 
     def get_driven_op(self) -> qutip.Qobj:
         return self.driven_op

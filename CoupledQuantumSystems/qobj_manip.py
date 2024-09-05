@@ -177,3 +177,86 @@ def find_dominant_frequency(expectation,tlist,dominant_frequency_already_found =
 def transition_frequency(hilbertspace,s0: int, s1: int) -> float:
     return (hilbertspace.energy_by_dressed_index(s1)- hilbertspace.energy_by_dressed_index(s0))
 
+
+# Deprecated
+def get_product(dressed_dm,pad_back_custom,product_to_dressed,sign_multiplier):
+    '''
+    This function converts a dressed density matrix to product basis, taking into consideration the sign difference between dressed basis and product basis.
+    Here, "sign difference" means that, for almost all pacakges (scipy, numpy, jax.numpy), when computing the eigensystem, there are eigenvectors that's shaped like [0,0,-1,0,0]. 
+        but when I use eigenstates as initial states, I use [0,0,1,0,0]. 
+    '''
+    dressed_dm_data = pad_back_custom(dressed_dm)
+    # if dressed_dm_data.shape[1] == 1:
+    #     dressed_dm_data = qutip.ket2dm(dressed_dm_data)
+    dressed_dm_data = dressed_dm_data.full() # 2d np.array
+
+    # Infer subsystem dimensions
+    subsystem_dims = [max(indexes) + 1 for indexes in zip(*product_to_dressed.keys())]
+    rho_product = np.zeros((subsystem_dims*2), dtype=complex) # Here rho_product is shaped like (dim1,dim2,dim1,dim2)
+
+    # unvectorized
+    for product_state, dressed_index1 in product_to_dressed.items():
+        for product_state2, dressed_index2 in product_to_dressed.items():
+            element = dressed_dm_data[dressed_index1, dressed_index2] * sign_multiplier[dressed_index1] * sign_multiplier[dressed_index2]
+            rho_product[product_state+product_state2] += element # Using index like (lvl1, lvl2, lvl1, lvl2) to access of of the entries
+
+    two_lvl_qbt_dm_size = np.prod(subsystem_dims)
+    rho_product = rho_product.reshape((two_lvl_qbt_dm_size,two_lvl_qbt_dm_size))
+    rho_product = qutip.Qobj(rho_product, dims=[subsystem_dims, subsystem_dims])
+    return rho_product
+
+def get_product_vectorized(dressed_dm,pad_back_custom,product_to_dressed,sign_multiplier):
+    '''
+    This function converts a dressed density matrix to product basis, taking into consideration the sign difference between dressed basis and product basis.
+    Here, "sign difference" means that, for almost all pacakges (scipy, numpy, jax.numpy), when computing the eigensystem, there are eigenvectors that's shaped like [0,0,-1,0,0]. 
+        but when I use eigenstates as initial states, I use [0,0,1,0,0]. 
+    '''
+    dressed_dm_data = pad_back_custom(dressed_dm)
+    # if dressed_dm_data.shape[1] == 1:
+    #     dressed_dm_data = qutip.ket2dm(dressed_dm_data)
+    dressed_dm_data = dressed_dm_data.full() # 2d np.array
+
+    subsystem_dims = [max(indexes) + 1 for indexes in zip(*product_to_dressed.keys())]
+    rho_product =dressed_to_product_vectorized(product_to_dressed, dressed_dm_data, sign_multiplier,subsystem_dims) 
+
+    two_lvl_qbt_dm_size = np.prod(subsystem_dims)
+    rho_product = rho_product.reshape((two_lvl_qbt_dm_size,two_lvl_qbt_dm_size))
+    rho_product = qutip.Qobj(rho_product, dims=[subsystem_dims, subsystem_dims])
+    return rho_product
+
+def dressed_to_product_vectorized(product_to_dressed, dressed_dm_data, sign_multiplier,subsystem_dims=None):
+    if subsystem_dims is None:
+        # Step 1: Get the subsystem dimensions (generalized for any number of dimensions)
+        subsystem_dims = [max(indexes) + 1 for indexes in zip(*product_to_dressed.keys())]
+    num_dims = len(subsystem_dims)
+    
+    # Step 2: Construct the shape for rho_product (twice the number of dimensions)
+    rho_product = np.zeros(subsystem_dims * 2, dtype=complex)
+
+    # Step 3: Extract product states and dressed indices
+    product_states = np.array(list(product_to_dressed.keys()))  # Shape: (num_states, num_dimensions)
+    dressed_indices = np.array(list(product_to_dressed.values()))  # Shape: (num_states,)
+    
+    # Step 4: Get the dressed submatrix and sign multipliers
+    dressed_dm_submatrix = dressed_dm_data[np.ix_(dressed_indices, dressed_indices)]  # Shape: (num_states, num_states)
+    sign_multipliers = sign_multiplier[dressed_indices]  # Shape: (num_states,)
+    
+    # Step 5: Apply sign multiplier to the dressed_dm_submatrix
+    element_matrix = dressed_dm_submatrix * np.outer(sign_multipliers, sign_multipliers)  # Shape: (num_states, num_states)
+
+    # Step 6: Prepare indices for updating rho_product using numpy
+    rho_indices = []
+
+    # For each dimension of the product state, we create the corresponding indices for the first and second parts
+    for dim in range(num_dims):
+        idx1, idx2 = np.meshgrid(product_states[:, dim], product_states[:, dim], indexing='ij')  # First and second indices for this dimension
+        rho_indices.append(idx1)
+        rho_indices.append(idx2)
+
+    # Step 7: Convert list of indices into a tuple for advanced indexing
+    rho_indices = tuple(rho_indices)  # This will now be a tuple of length `2 * num_dims`
+
+    # Step 8: Use advanced indexing to update rho_product
+    rho_product[rho_indices] += element_matrix
+
+    return rho_product

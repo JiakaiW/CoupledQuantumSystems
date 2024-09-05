@@ -22,8 +22,6 @@ from qobj_manip import *
 ############################################################################
 
 
-
-
 def compute_expectation(ket_or_dm, operator):
     # Check if the input is a ket or a density matrix
     if ket_or_dm.shape[-1] == 1:  # Input is a ket

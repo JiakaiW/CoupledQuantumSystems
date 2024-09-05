@@ -1,5 +1,7 @@
 import concurrent
 from itertools import product
+from functools import partial
+import multiprocessing
 
 from loky import get_reusable_executor
 import numpy as np
@@ -9,6 +11,7 @@ from typing import List, Union, Tuple
 from qobj_manip import *
 from drive import *
 from evo import ODEsolve_and_post_process
+from qobj_manip import get_product, get_product_vectorized
 
 ############################################################################
 #
@@ -92,6 +95,34 @@ class CoupledSystem:
 
     def pad_back_function(self, qobj):
         return pad_back_custom(qobj, self.products_to_keep, self.product_to_dressed)
+
+    def convert_dressed_to_product_vectorized(self,
+                                             states,
+                                             products_to_keep,
+                                             num_processes=None):
+        self.set_new_product_to_keep(products_to_keep)
+        self.set_new_operators_after_setting_new_product_to_keep()
+        
+        if num_processes is None:
+            num_processes = multiprocessing.cpu_count()
+        
+        # partial_function = partial(get_product,
+        #                         pad_back_custom = self.pad_back_function,
+        #                         product_to_dressed = self.product_to_dressed,
+        #                         sign_multiplier = self.sign_multiplier)
+
+        # with multiprocessing.Pool(processes=num_processes) as pool:
+        #     product_states = pool.map(partial_function,states)
+
+        # numpy already uses multi-core?
+        product_states  = []
+        for state in states:
+            product_states.append(get_product_vectorized(state,
+                                                         self.pad_back_custom,
+                                                         self.product_to_dressed,
+                                                         self.sign_multiplier))
+
+        return product_states
 
     def run_qutip_mesolve_parrallel(self,
                                     initial_states: qutip.Qobj,  # truncated initial states
