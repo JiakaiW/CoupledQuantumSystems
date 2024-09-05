@@ -1,8 +1,8 @@
-from systems import CoupledSystem
 import concurrent
 from loky import get_reusable_executor
 from typing import List, Any
 
+from CoupledQuantumSystems.systems import CoupledSystem
 from CoupledQuantumSystems.qobj_manip import pad_back_custom,dressed_to_2_level_dm
 from CoupledQuantumSystems.evo import ODEsolve_and_post_process   
 
