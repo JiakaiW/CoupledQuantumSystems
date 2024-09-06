@@ -2,7 +2,7 @@
 ```
 pip3 install git+https://github.com/JiakaiW/CoupledQuantumSystems
 ```
-### Note that this is primarily for personal use. Structure is not quite organized. 
+### Note that this is primarily for personal use. Structure is not quite organized. (may call it early alpha)
 
 ## Features:
 1. Abstract and facilitate the common workflows in dealing with coupled systems (particularly fluxonium)
