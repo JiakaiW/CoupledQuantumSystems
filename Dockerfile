@@ -9,4 +9,4 @@ RUN pip3 install scqubits
 RUN pip3 install git+https://github.com/JiakaiW/CoupledQuantumSystems
 
 # Use: in terminal run
-# docker build --no-cache -t CoupledQuantumSystems:v1 .
+# docker build --no-cache -t coupledquantumsystems:v1 .
