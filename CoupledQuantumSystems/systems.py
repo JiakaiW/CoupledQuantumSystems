@@ -6,6 +6,7 @@ import numpy as np
 import qutip
 import scqubits
 from typing import List, Union, Tuple
+from functools import partial
 
 from CoupledQuantumSystems.qobj_manip import generate_single_mapping,truncate_custom,pad_back_custom,dressed_to_2_level_dm
 from CoupledQuantumSystems.drive import DriveTerm
@@ -115,6 +116,7 @@ class CoupledSystem:
         if num_processes is None:
             num_processes = multiprocessing.cpu_count()
         
+        ## non-vectorized multi processing
         # partial_function = partial(get_product,
         #                         pad_back_custom = self.pad_back_function,
         #                         product_to_dressed = self.product_to_dressed,
@@ -123,13 +125,22 @@ class CoupledSystem:
         # with multiprocessing.Pool(processes=num_processes) as pool:
         #     product_states = pool.map(partial_function,states)
 
-        # numpy already uses multi-core?
-        product_states  = []
-        for state in states:
-            product_states.append(get_product_vectorized(state,
-                                                         self.pad_back_function,
-                                                         self.product_to_dressed,
-                                                         self.sign_multiplier_vector))
+        # None-multiprocessing, vectorized
+        # product_states  = []
+        # for state in tqdm(states):
+        #     product_states.append(get_product_vectorized(state,
+        #                                                  self.pad_back_function,
+        #                                                  self.product_to_dressed,
+        #                                                  self.sign_multiplier_vector))
+
+        # Multiprocessing, vectorized
+        partial_function = partial(get_product_vectorized,
+                        pad_back_custom = self.pad_back_function,
+                        product_to_dressed = self.product_to_dressed,
+                        sign_multiplier_vector = self.sign_multiplier_vector)
+
+        with multiprocessing.Pool(processes=num_processes) as pool:
+            product_states = pool.map(partial_function,states)
 
         return product_states
 
