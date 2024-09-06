@@ -11,3 +11,4 @@ pip3 install git+https://github.com/JiakaiW/CoupledQuantumSystems
 
 ## TODO:
 1. implement product state to dressed state assignment by adiabatically turning on the coupling.
+2. Add calling of jax solvers (dynamiqs) once their machine-precision solvers are out

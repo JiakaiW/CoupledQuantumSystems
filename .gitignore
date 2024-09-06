@@ -1,0 +1,7 @@
+_pycache_/
+.DS_Store
+*pycache*
+*.zip
+*.err
+Miniconda3-latest-Linux-x86_64.sh
+# *.pkl
