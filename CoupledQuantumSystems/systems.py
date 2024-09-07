@@ -360,7 +360,22 @@ class FluxoniumOscillatorSystem(CoupledSystem):
         self.kappa = kappa
         self.c_ops = [np.sqrt(self.kappa) * self.a_trunc]
 
-
+    def get_ladder_overlap_arr(self,resonator_creation_arr):
+        # resonator_creation_arr should be an id padded arr
+        # each row (first index) is a dressed ket in product basis
+        evecs_arr_row_dressed_ket = scqubits.utils.spectrum_utils.convert_evecs_to_ndarray(self.evecs)
+        # now each column (second index) is a dressed ket in product basis
+        evecs_arr_column_dressed_ket = evecs_arr_row_dressed_ket.T
+        # each column is a dressed state after creation in product basis
+        evecs_after_creation_arr_column_dressed_ket = resonator_creation_arr @ evecs_arr_column_dressed_ket
+        denominator_1d = np.sum(np.abs(evecs_after_creation_arr_column_dressed_ket) ** 2, axis=0)
+        # (row i, column j) is the overlap between i and creation@j
+        numerator = evecs_arr_row_dressed_ket.conj() @ evecs_after_creation_arr_column_dressed_ket
+        # (row i, column j) is the normalized overlap between i and creation@j
+        ladder_overlap = (numerator/denominator_1d)**2
+        ladder_overlap = np.abs(ladder_overlap)
+        return ladder_overlap
+    
 # class FluxoniumTunableTransmonSystem(CoupledSystem):
 #     '''
 #     To model leakage detection of 12 fluxonium
