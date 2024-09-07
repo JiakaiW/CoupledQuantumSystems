@@ -6,7 +6,8 @@ DIST_NAME = "CoupledQuantumSystems"
 PACKAGE_NAME = "CoupledQuantumSystems"
 
 REQUIREMENTS = [
-    "numpy",
+    "scipy==1.12.0",
+    "numpy==1.26.4",
     "qutip==4.7.5",
     "scqubits==4.0.0",
 ]
