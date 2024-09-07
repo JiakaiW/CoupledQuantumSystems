@@ -7,8 +7,8 @@ PACKAGE_NAME = "CoupledQuantumSystems"
 
 REQUIREMENTS = [
     "numpy",
-    "qutip",
-    "scqubits",
+    "qutip==4.7.5",
+    "scqubits==4.0.0",
 ]
 EXTRA_REQUIREMENTS = [
 
