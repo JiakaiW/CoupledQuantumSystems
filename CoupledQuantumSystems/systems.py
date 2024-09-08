@@ -109,9 +109,11 @@ class CoupledSystem:
     def convert_dressed_to_product_vectorized(self,
                                              states,
                                              products_to_keep,
-                                             num_processes=None):
-        self.set_new_product_to_keep(products_to_keep)
-        self.set_new_operators_after_setting_new_product_to_keep()
+                                             num_processes=None,
+                                             update_products_to_keep = True):
+        if update_products_to_keep:
+            self.set_new_product_to_keep(products_to_keep)
+            self.set_new_operators_after_setting_new_product_to_keep()
         
         if num_processes is None:
             num_processes = multiprocessing.cpu_count()
