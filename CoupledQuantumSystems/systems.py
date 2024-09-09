@@ -44,6 +44,11 @@ class CoupledSystem:
         self.product_to_dressed = generate_single_mapping(
             self.hilbertspace.hamiltonian(), evals=self.evals, evecs=self.evecs)
 
+        self.set_new_product_to_keep(products_to_keep)
+
+        self.set_sign_multiplier()
+
+    def set_sign_multiplier(self):
         #############################################################################################
         #############################################################################################
         # TODO: This part about getting negative signs can be written more elegantly
@@ -51,9 +56,9 @@ class CoupledSystem:
         # Also modify the original qubit index in the product indices to 0 and 1.
         self.filtered_product_to_dressed = {}
         for product_state, dressed_index in self.product_to_dressed.items():
-            if product_state[qbt_position] in (self.computaional_states[0], self.computaional_states[1]):
+            if product_state[self.qbt_position] in (self.computaional_states[0], self.computaional_states[1]):
                 new_product_state = list(product_state)
-                new_product_state[qbt_position] = 0 if product_state[qbt_position] == self.computaional_states[0] else 1
+                new_product_state[self.qbt_position] = 0 if product_state[self.qbt_position] == self.computaional_states[0] else 1
                 self.filtered_product_to_dressed[tuple(
                     new_product_state)] = dressed_index
 
@@ -75,19 +80,11 @@ class CoupledSystem:
         self.sign_multiplier = {idx: -1 if idx in dressed_idxes_with_negative_sign_set else 1
                                 for idx in self.product_to_dressed.values()}
 
-        # Pre-compute the sign multiplier for each dressed index
-        self.sign_multiplier = {idx: -1 if idx in dressed_idxes_with_negative_sign_set else 1
-                                for idx in self.product_to_dressed.values()}
 
         max_index = max(self.sign_multiplier.keys())
         self.sign_multiplier_vector = np.zeros(max_index + 1, dtype=int)
         for index, sign in self.sign_multiplier.items():
             self.sign_multiplier_vector[index] = sign
-            
-        #############################################################################################
-        #############################################################################################
-
-        self.set_new_product_to_keep(products_to_keep)
 
     def set_new_product_to_keep(self, products_to_keep):
         if products_to_keep == None or products_to_keep == []:
