@@ -2,6 +2,9 @@
 ```
 pip3 install git+https://github.com/JiakaiW/CoupledQuantumSystems
 ```
+
+![workflow of quantum simulation using this package](assets/CoupledQuantumSystems.png)
+
 ### Note that this is primarily for personal use. Structure is not quite organized. (may call it early alpha)
 
 ## Features:
