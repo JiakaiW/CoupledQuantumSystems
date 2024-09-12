@@ -72,7 +72,7 @@ class gfIFQ:
         T1_array[np.abs(T1_array)>threshold] = threshold
 
         # Tphi
-        for ql in range(self.truncated_dim):
+        for ql in range(1,self.truncated_dim):
             Tphi_array[ql] = T_phi(
                 second_order_derivative=second_order_derivative(partial(
                     get_frequency,
