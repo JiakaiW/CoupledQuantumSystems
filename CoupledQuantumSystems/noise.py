@@ -12,14 +12,29 @@ from functools import partial
 ############################################################################
 
 
-############################################################################
-# T_phi
-############################################################################
-
 hbar = 1/(2*np.pi)
 kB = 8.617333262e-5  # eV K−1
 hbar_in_eVs = 6.5821e-16  # eV s
 temp_in_mK = 20
+
+
+############################################################################
+# T_phi
+############################################################################
+
+def T_phi(second_order_derivative, one_over_f_flux_noise_amplitude, first_order_derivative= 0 ):  # eqn (13) of Peter Groszkowski et al 2018 New J. Phys. 20 043053
+    omega_uv = 3 * 2 * np.pi  # GHz
+    omega_ir = 1e-9 * 2 * np.pi  # GHz
+    t = 10e3  # ns
+    A = one_over_f_flux_noise_amplitude  # in unit of Phi0
+
+    first_order_part = 2 * A**2 * first_order_derivative**2
+    first_order_part *= np.abs(np.log(omega_ir * t))
+
+    second_order_part = 2 * A**4 * second_order_derivative**2  # Phi0^4 GHZ^2 / Phi0^4
+    second_order_part *= (np.log(omega_uv / omega_ir)**2 + 2 * np.log(omega_ir * t)**2)  # GHZ^2
+    return (first_order_part + second_order_part)  **(-1/2)  # ns
+
 
 def second_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=50):
     h = 1e-3
@@ -47,10 +62,11 @@ def first_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=50):
         derivative_old = derivative_new
     raise ValueError("Convergence not reached within the maxietam number of iterations")
 
-def get_fluxonium_frequency(flux,EJ,EC,EL,i,j):
-    qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
-    vals = qbt.eigenvals()
-    return np.abs(vals[j]-vals[i])
+
+############################################################################
+# T_1
+############################################################################
+
 
 def diel_spectral_density(omega, EC,temp_in_mK = 20 ,tangent_ref = 1e-5):
     beta = 1 / (kB * temp_in_mK * 1e-3)  # 1/eV
@@ -79,20 +95,12 @@ def one_over_f_spectral_density(omega, EL,one_over_f_flux_noise_amplitude ):
 # Fluxonium
 ############################################################################
 
-def T_phi(second_order_derivative, one_over_f_flux_noise_amplitude, first_order_derivative= 0 ):  # eqn (13) of Peter Groszkowski et al 2018 New J. Phys. 20 043053
-    omega_uv = 3 * 2 * np.pi  # GHz
-    omega_ir = 1e-9 * 2 * np.pi  # GHz
-    t = 10e3  # ns
-    A = one_over_f_flux_noise_amplitude  # in unit of Phi0
-
-    first_order_part = 2 * A**2 * first_order_derivative**2
-    first_order_part *= np.abs(np.log(omega_ir * t))
-
-    second_order_part = 2 * A**4 * second_order_derivative**2  # Phi0^4 GHZ^2 / Phi0^4
-    second_order_part *= (np.log(omega_uv / omega_ir)**2 + 2 * np.log(omega_ir * t)**2)  # GHZ^2
-    return (first_order_part + second_order_part)  **(-1/2)  # ns
-
 def get_frequency(flux,EJ,EC,EL,i,j):
+    qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
+    vals = qbt.eigenvals()
+    return np.abs(vals[j]-vals[i])
+
+def get_fluxonium_frequency(flux,EJ,EC,EL,i,j):
     qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
     vals = qbt.eigenvals()
     return np.abs(vals[j]-vals[i])
