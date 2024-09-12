@@ -28,7 +28,7 @@ class gfIFQ:
                  EJ,
                  EC,
                  EL,
-                 flux=0, truncated_dim=8) -> None:
+                 flux=0, truncated_dim=20) -> None:
         self.fluxonium = scqubits.Fluxonium(EJ=EJ,
                                             EC=EC,
                                             EL=EL,
@@ -66,21 +66,27 @@ class gfIFQ:
                     freq, EC, temp_in_mK, loss_tangent_ref))
                 one_over_f_T1_array[i, j] = 1 / (np.abs(phi_ele)**2 * one_over_f_spectral_density(
                     freq, EL, one_over_f_flux_noise_amplitude))
-        T1_array = 2/(1/dielectric_T1_array + 1/one_over_f_T1_array)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            T1_array = 1/(1/dielectric_T1_array + 1/one_over_f_T1_array)
+        threshold = 1e12
+        T1_array[np.abs(T1_array)>threshold] = threshold
 
         # Tphi
         for i in range(self.truncated_dim):
             Tphi_array[i] = T_phi(
-                second_order_derivative=get_second_order_derivative_of_eigenenergy(
+                second_order_derivative=second_order_derivative(partial(
+                    get_frequency,
                     EJ=self.fluxonium.EJ,
                     EC=self.fluxonium.EC,
                     EL=self.fluxonium.EL,
-                    i=i,
-                    flux0=0),
+                    i=0,j=2
+                    ),x0=0),
                 one_over_f_flux_noise_amplitude=one_over_f_flux_noise_amplitude
             )
+        threshold = 1e12
+        Tphi_array[np.abs(Tphi_array)>threshold] = threshold
 
-        c_ops = qutip.Qobj(T1_array) + qutip.Qobj(np.diag(Tphi_array))
+        c_ops = qutip.Qobj(1/T1_array) + qutip.Qobj(np.diag(1/Tphi_array))
         return c_ops
 
     def get_STIRAP_drive_terms(self,
