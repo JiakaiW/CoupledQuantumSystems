@@ -8,6 +8,8 @@ from typing import List, Union,Any
 from CoupledQuantumSystems.drive import *
 from CoupledQuantumSystems.evo import ODEsolve_and_post_process
 from CoupledQuantumSystems.noise import *
+from CoupledQuantumSystems.qobj_manip import *
+
 
 '''
 The numerical study of single-qubit gates for gf-IFQ is composed of these tasks.
@@ -195,7 +197,6 @@ class gfIFQ:
     # def get_inertial_STIRAP_drive_terms(self):
         # Inertial geometric quantum logic gates D. Turyansky, O. Ovdat, R. Dann, Z. Aqua, R. Kosloff, B. Dayan, and A. Pick. Phys. Rev. Applied 21, 054033 – Published 17 May 2024
         pass
-
 
     def get_pi_pulse_drive_terms(self,
                                  i,

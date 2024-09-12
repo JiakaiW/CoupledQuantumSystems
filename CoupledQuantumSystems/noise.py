@@ -30,10 +30,6 @@ def second_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=20):
     raise ValueError("Convergence not reached within the maximum number of iterations")
 
 
-def get_frequency(flux,EJ,EC,EL,i,j):
-    qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
-    vals = qbt.eigenvals()
-    return np.abs(vals[j]-vals[i])
 
 def get_eigenenergy(flux,EJ,EC,EL,i):
     qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
@@ -85,3 +81,11 @@ def one_over_f_spectral_density(omega, EL,one_over_f_flux_noise_amplitude ):
     return_val /= omega  # GHz
     return np.abs(return_val)
 
+############################################################################
+# Fluxonium
+############################################################################
+
+def get_frequency(flux,EJ,EC,EL,i,j):
+    qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
+    vals = qbt.eigenvals()
+    return np.abs(vals[j]-vals[i])
