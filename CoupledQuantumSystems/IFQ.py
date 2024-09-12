@@ -72,14 +72,14 @@ class gfIFQ:
         T1_array[np.abs(T1_array)>threshold] = threshold
 
         # Tphi
-        for i in range(self.truncated_dim):
-            Tphi_array[i] = T_phi(
+        for ql in range(self.truncated_dim):
+            Tphi_array[ql] = T_phi(
                 second_order_derivative=second_order_derivative(partial(
                     get_frequency,
                     EJ=self.fluxonium.EJ,
                     EC=self.fluxonium.EC,
                     EL=self.fluxonium.EL,
-                    i=0,j=2
+                    i=0,j=ql
                     ),x0=0),
                 one_over_f_flux_noise_amplitude=one_over_f_flux_noise_amplitude
             )
