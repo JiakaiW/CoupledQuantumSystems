@@ -42,17 +42,15 @@ class gfIFQ:
         self.n_tabel = self.fluxonium.matrixelement_table(
             'n_operator', evals_count=truncated_dim)
 
-    def get_c_ops(self,
+    def get_T1_c_ops(self,
                   temp_in_mK,
                   loss_tangent_ref,
                   one_over_f_flux_noise_amplitude) -> None:
-        # array element [i,j] means transition rate from i to j
-        dielectric_T1_array = np.zeros(
-            shape=(self.truncated_dim, self.truncated_dim))
-        one_over_f_T1_array = np.zeros(
-            shape=(self.truncated_dim, self.truncated_dim))
-        T1_array = np.zeros(shape=(self.truncated_dim, self.truncated_dim))
-        Tphi_array = np.zeros(shape=(self.truncated_dim,))
+        # array element [i,j] means transition rate from j to i
+        dielectric_T1_array = np.full(
+            (self.truncated_dim, self.truncated_dim), np.inf)
+        one_over_f_T1_array = np.full(
+            (self.truncated_dim, self.truncated_dim), np.inf)
         EL = self.fluxonium.EL
         EC = self.fluxonium.EC
         # T1
@@ -62,15 +60,18 @@ class gfIFQ:
                     continue
                 freq = (self.evals[i]-self.evals[j]) * 2 * np.pi
                 phi_ele = self.phi_tabel[i, j]
-                dielectric_T1_array[i, j] = 1 / (np.abs(phi_ele)**2 * diel_spectral_density(
+                dielectric_T1_array[j, i] = 1 / (np.abs(phi_ele)**2 * diel_spectral_density(
                     freq, EC, temp_in_mK, loss_tangent_ref))
-                one_over_f_T1_array[i, j] = 1 / (np.abs(phi_ele)**2 * one_over_f_spectral_density(
+                one_over_f_T1_array[j, i] = 1 / (np.abs(phi_ele)**2 * one_over_f_spectral_density(
                     freq, EL, one_over_f_flux_noise_amplitude))
         with np.errstate(divide='ignore', invalid='ignore'):
             T1_array = 1/(1/dielectric_T1_array + 1/one_over_f_T1_array)
-        threshold = 1e12
-        T1_array[np.abs(T1_array)>threshold] = threshold
+        c_ops = qutip.Qobj(1/np.sqrt(T1_array))
+        return c_ops
 
+    def get_Tphi_c_ops(self,
+                  one_over_f_flux_noise_amplitude) -> None:
+        Tphi_array = np.zeros(shape=(self.truncated_dim,))
         # Tphi
         for ql in range(1,self.truncated_dim):
             Tphi_array[ql] = T_phi(
@@ -83,10 +84,7 @@ class gfIFQ:
                     ),x0=0),
                 one_over_f_flux_noise_amplitude=one_over_f_flux_noise_amplitude
             )
-        threshold = 1e12
-        Tphi_array[np.abs(Tphi_array)>threshold] = threshold
-
-        c_ops = qutip.Qobj(1/T1_array) + qutip.Qobj(np.diag(1/Tphi_array))
+        c_ops = qutip.Qobj(np.diag(1/np.sqrt((Tphi_array))))
         return c_ops
 
     def get_STIRAP_drive_terms(self,
