@@ -105,7 +105,7 @@ def sin_squared_pulse_with_modulation(t, args={}):
     phi = args.get('phi', 0)
 
     def cos_modulation():
-        return 2 * np.pi * amp * np.cos(w_d * 2 * np.pi * t - phi)
+        return 2 * np.pi * np.cos(w_d * 2 * np.pi * t - phi)
     
     t_end = t_start + t_duration  # End of the pulse
     
@@ -113,9 +113,33 @@ def sin_squared_pulse_with_modulation(t, args={}):
         return 0
     elif t_start <= t <= t_end:
         envelope = np.sin(np.pi * (t - t_start) / t_duration) ** 2
-        return envelope * cos_modulation()
+        return amp * envelope * cos_modulation()
     else:
         return 0
+
+
+def sin_squared_DRAG_with_modulation(t, args={}):
+    w_d = args['w_d']
+    amp = args['amp']
+    amp_correction = args['amp_correction']
+    t_duration = args.get('t_duration')
+    t_start = args.get('t_start', 0)  # Default start time is 0
+    phi = args.get('phi', 0)
+
+    def cos_modulation():
+        return 2 * np.pi * np.cos(w_d * 2 * np.pi * t - phi)
+    
+    t_end = t_start + t_duration  # End of the pulse
+    
+    if t < t_start:
+        return 0
+    elif t_start <= t <= t_end:
+        envelope = np.sin(np.pi * (t - t_start) / t_duration) ** 2
+        envelope_derivative = np.sin(2 * np.pi * (t - t_start) / t_duration)
+        return ( amp * envelope + 1j* amp_correction * envelope_derivative ) * cos_modulation() 
+    else:
+        return 0
+
 
 def gaussian_pulse(t, args={}):
     amp = args['amp']
