@@ -253,7 +253,6 @@ class gfIFQ:
             for future in concurrent.futures.as_completed(futures):
                 original_index = futures[future]
                 results[original_index] = future.result()
-
         return results
     
 def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
