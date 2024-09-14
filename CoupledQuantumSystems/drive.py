@@ -142,18 +142,20 @@ def sin_squared_DRAG_with_modulation(t, args={}):
 
 
 def gaussian_pulse(t, args={}):
+    w_d = args['w_d']
     amp = args['amp']
     t_duration = args['t_duration']
     t_start = args.get('t_start', 0)  # Default start time is 0
     how_many_sigma = args.get('how_many_sigma', 6)  # Default factor to determine sigma
     normalize = args.get('normalize', False)  # Default normalization is False
-
+    phi = args.get('phi', 0)
     sigma = t_duration/how_many_sigma
     t_center = t_start + t_duration / 2  # Center of the Gaussian pulse
 
     def gaussian(t):
         return amp * np.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
-
+    def cos_modulation():
+        return 2 * np.pi * np.cos(w_d * 2 * np.pi * t - phi)
     t_end = t_start + t_duration  # End of the pulse
 
     if t < t_start or t > t_end:
@@ -163,7 +165,7 @@ def gaussian_pulse(t, args={}):
         if normalize:
             a = gaussian(t_start)
             pulse_value = (pulse_value - a) / (1 - a)
-        return pulse_value
+        return pulse_value* cos_modulation() 
     
 def STIRAP_with_modulation(t,args = {}):
     # Symmetric Rydberg controlled-𝑍 gates with adiabatic pulses M. Saffman, I. I. Beterov, A. Dalal, E. J. Páez, and B. C. Sanders Phys. Rev. A 101, 062309 – Published 3 June 2020
