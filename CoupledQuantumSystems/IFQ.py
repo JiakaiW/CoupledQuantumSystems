@@ -134,15 +134,22 @@ class gfIFQ:
                               i,
                               j,
                               k,
-                              detuning,
                               t_duration,
                               shape:str,
+                              detuning = None,
+                              detuning1 = None,
+                              detuning2 = None,
                               amp_scaling_factor= 1,
                               amp1_scaling_factor = 1,
                               amp2_scaling_factor = 1,
                               t_start=0,
                               phi=0
                               ):
+        if detuning1 is None or detuning2 is None:
+            if detuning is None:
+                raise Exception('no detuning provided') 
+            detuning1 = detuning
+            detuning2 = detuning
         if shape == 'sin^2':
             # area =  amp= 2*np.pi /t_duration
             amp_ij = amp_scaling_factor*amp1_scaling_factor * np.pi / \
@@ -156,7 +163,7 @@ class gfIFQ:
                     pulse_shape_func=sin_squared_pulse_with_modulation,
                     pulse_id='ij',
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning,  # Without 2pi
+                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning1,  # Without 2pi
                         'amp': amp_jk,  # Without 2pi
                         't_duration': t_duration,
                         't_start': t_start,
@@ -169,7 +176,7 @@ class gfIFQ:
                     pulse_shape_func=sin_squared_pulse_with_modulation,
                     pulse_id='jk',
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning,  # Without 2pi
+                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning2,  # Without 2pi
                         'amp': amp_ij,  # Without 2pi
                         't_duration': t_duration,
                         't_start': t_start,
@@ -192,7 +199,7 @@ class gfIFQ:
                     pulse_shape_func=gaussian_pulse,
                     pulse_id='ij',
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning,  # Without 2pi
+                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning1,  # Without 2pi
                         'amp': amp_ij,  # Without 2pi
                         't_duration': t_duration,
                         'how_many_sigma': how_many_sigma,
@@ -205,7 +212,7 @@ class gfIFQ:
                     pulse_shape_func=gaussian_pulse,
                     pulse_id='jk',
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning,  # Without 2pi
+                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning2,  # Without 2pi
                         'amp': amp_jk,  # Without 2pi
                         't_duration': t_duration,
                         'how_many_sigma': how_many_sigma,
@@ -219,9 +226,11 @@ class gfIFQ:
                               i,
                               j,
                               k,
-                              detuning,
                               t_duration,
                               shape:str,
+                              detuning = None,
+                              detuning1 = None,
+                              detuning2 = None,
                               amp_scaling_factor = 1,
                               amp1_scaling_factor = 1,
                               amp2_scaling_factor = 1,
@@ -230,6 +239,11 @@ class gfIFQ:
                               t_start=0,
                               phi=0
                               ):
+        if detuning1 is None or detuning2 is None:
+            if detuning is None:
+                raise Exception('no detuning provided') 
+            detuning1 = detuning
+            detuning2 = detuning
         if shape == 'sin^2':
             # area =  amp= 2*np.pi /t_duration
             amp_ij = amp_scaling_factor*amp1_scaling_factor * np.pi / \
@@ -243,7 +257,7 @@ class gfIFQ:
                     pulse_shape_func=sin_squared_DRAG_with_modulation,
                     pulse_id='ij',
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning,  # Without 2pi
+                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning1,  # Without 2pi
                         'amp': amp_ij,  # Without 2pi
                         'amp_correction': amp_ij*amp1_correction_scaling_factor,
                         't_duration': t_duration,
@@ -257,7 +271,7 @@ class gfIFQ:
                     pulse_shape_func=sin_squared_DRAG_with_modulation,
                     pulse_id='jk',
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning,  # Without 2pi
+                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning2,  # Without 2pi
                         'amp': amp_jk,  # Without 2pi
                         'amp_correction': amp_jk*amp2_correction_scaling_factor,
                         't_duration': t_duration,
@@ -281,7 +295,7 @@ class gfIFQ:
                     pulse_shape_func=gaussian_DRAG_pulse,
                     pulse_id='ij',
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning,  # Without 2pi
+                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning1,  # Without 2pi
                         'amp': amp_ij,  # Without 2pi
                         't_duration': t_duration,
                         'how_many_sigma': how_many_sigma,
@@ -295,7 +309,7 @@ class gfIFQ:
                     pulse_shape_func=gaussian_DRAG_pulse,
                     pulse_id='jk',
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning,  # Without 2pi
+                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning2,  # Without 2pi
                         'amp': amp_jk,  # Without 2pi
                         't_duration': t_duration,
                         'how_many_sigma': how_many_sigma,
