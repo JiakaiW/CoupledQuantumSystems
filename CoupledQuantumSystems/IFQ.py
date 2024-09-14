@@ -137,7 +137,7 @@ class gfIFQ:
                               detuning,
                               t_duration,
                               shape:str,
-                              amp_scaling_factor,
+                              amp_scaling_factor= 1,
                               amp1_scaling_factor = 1,
                               amp2_scaling_factor = 1,
                               t_start=0,
@@ -155,7 +155,7 @@ class gfIFQ:
                         self.fluxonium.n_operator(energy_esys=True)),
                     pulse_shape_func=sin_squared_pulse_with_modulation,
                     pulse_id='ij',
-                    pulse_shape_args_without_id={
+                    pulse_shape_args={
                         'w_d': np.abs(self.evals[k]-self.evals[j])-detuning,  # Without 2pi
                         'amp': amp_jk,  # Without 2pi
                         't_duration': t_duration,
@@ -168,7 +168,7 @@ class gfIFQ:
                         self.fluxonium.n_operator(energy_esys=True)),
                     pulse_shape_func=sin_squared_pulse_with_modulation,
                     pulse_id='jk',
-                    pulse_shape_args_without_id={
+                    pulse_shape_args={
                         'w_d': np.abs(self.evals[j]-self.evals[i])-detuning,  # Without 2pi
                         'amp': amp_ij,  # Without 2pi
                         't_duration': t_duration,
@@ -178,7 +178,134 @@ class gfIFQ:
                 ),
             ]
             return drive_terms
+        
+        elif shape == 'gaussian':
+            how_many_sigma = 6
+            sigma = t_duration/6
+            # area =  amp= 2*np.pi /t_duration
+            amp_ij = amp_scaling_factor*amp1_scaling_factor * np.sqrt(np.pi)/np.sqrt(2) / sigma / np.abs(self.n_tabel[i, j])
+            amp_jk = amp_scaling_factor*amp2_scaling_factor* np.sqrt(np.pi)/np.sqrt(2) / sigma / np.abs(self.n_tabel[j, k])
+            drive_terms = [
+                DriveTerm(
+                    driven_op=qutip.Qobj(
+                        self.fluxonium.n_operator(energy_esys=True)),
+                    pulse_shape_func=gaussian_pulse,
+                    pulse_id='ij',
+                    pulse_shape_args={
+                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning,  # Without 2pi
+                        'amp': amp_ij,  # Without 2pi
+                        't_duration': t_duration,
+                        'how_many_sigma': how_many_sigma,
+                        'normalize':True,
+                    },
+                ),
+                DriveTerm(
+                    driven_op=qutip.Qobj(
+                        self.fluxonium.n_operator(energy_esys=True)),
+                    pulse_shape_func=gaussian_pulse,
+                    pulse_id='jk',
+                    pulse_shape_args={
+                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning,  # Without 2pi
+                        'amp': amp_jk,  # Without 2pi
+                        't_duration': t_duration,
+                        'how_many_sigma': how_many_sigma,
+                        'normalize':True,
+                   },
+                ),
+            ]
+            return drive_terms
 
+    def get_Raman_DRAG_drive_terms(self,
+                              i,
+                              j,
+                              k,
+                              detuning,
+                              t_duration,
+                              shape:str,
+                              amp_scaling_factor = 1,
+                              amp1_scaling_factor = 1,
+                              amp2_scaling_factor = 1,
+                              amp1_correction_scaling_factor = 0.05,
+                              amp2_correction_scaling_factor = 0.05,
+                              t_start=0,
+                              phi=0
+                              ):
+        if shape == 'sin^2':
+            # area =  amp= 2*np.pi /t_duration
+            amp_ij = amp_scaling_factor*amp1_scaling_factor * np.pi / \
+                t_duration / np.abs(self.n_tabel[i, j])
+            amp_jk = amp_scaling_factor*amp2_scaling_factor*np.pi / \
+                t_duration / np.abs(self.n_tabel[j, k])
+            drive_terms = [
+                DriveTerm(
+                    driven_op=qutip.Qobj(
+                        self.fluxonium.n_operator(energy_esys=True)),
+                    pulse_shape_func=sin_squared_DRAG_with_modulation,
+                    pulse_id='ij',
+                    pulse_shape_args={
+                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning,  # Without 2pi
+                        'amp': amp_ij,  # Without 2pi
+                        'amp_correction': amp_ij*amp1_correction_scaling_factor,
+                        't_duration': t_duration,
+                        't_start': t_start,
+                        'phi': phi
+                    },
+                ),
+                DriveTerm(
+                    driven_op=qutip.Qobj(
+                        self.fluxonium.n_operator(energy_esys=True)),
+                    pulse_shape_func=sin_squared_DRAG_with_modulation,
+                    pulse_id='jk',
+                    pulse_shape_args={
+                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning,  # Without 2pi
+                        'amp': amp_jk,  # Without 2pi
+                        'amp_correction': amp_jk*amp2_correction_scaling_factor,
+                        't_duration': t_duration,
+                        't_start': t_start,
+                        'phi': phi
+                    },
+                ),
+            ]
+            return drive_terms
+        
+        elif shape == 'gaussian':
+            how_many_sigma = 6
+            sigma = t_duration/6
+            # area =  amp= 2*np.pi /t_duration
+            amp_ij = amp_scaling_factor*amp1_scaling_factor * np.sqrt(np.pi)/np.sqrt(2) / sigma / np.abs(self.n_tabel[i, j])
+            amp_jk = amp_scaling_factor*amp2_scaling_factor* np.sqrt(np.pi)/np.sqrt(2) / sigma / np.abs(self.n_tabel[j, k])
+            drive_terms = [
+                DriveTerm(
+                    driven_op=qutip.Qobj(
+                        self.fluxonium.n_operator(energy_esys=True)),
+                    pulse_shape_func=gaussian_DRAG_pulse,
+                    pulse_id='ij',
+                    pulse_shape_args={
+                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning,  # Without 2pi
+                        'amp': amp_ij,  # Without 2pi
+                        't_duration': t_duration,
+                        'how_many_sigma': how_many_sigma,
+                        'normalize':True,
+                        'amp_correction_scaling_factor':amp1_correction_scaling_factor
+                    },
+                ),
+                DriveTerm(
+                    driven_op=qutip.Qobj(
+                        self.fluxonium.n_operator(energy_esys=True)),
+                    pulse_shape_func=gaussian_DRAG_pulse,
+                    pulse_id='jk',
+                    pulse_shape_args={
+                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning,  # Without 2pi
+                        'amp': amp_jk,  # Without 2pi
+                        't_duration': t_duration,
+                        'how_many_sigma': how_many_sigma,
+                        'normalize':True,
+                        'amp_correction_scaling_factor':amp2_correction_scaling_factor
+                   },
+                ),
+            ]
+            return drive_terms
+        
     # def get_composite_STIRAP_drive_terms(self):
     #     # PHYSICAL REVIEW A 87, 043418 (2013)
     #     pass
