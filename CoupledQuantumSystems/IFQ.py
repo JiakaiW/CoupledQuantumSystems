@@ -92,20 +92,23 @@ class gfIFQ:
                                j,
                                k,
                                t_stop,
-                               Rabi_freq0=1e-1,
+                               Rabi_freqij=1e-1,
+                               Rabi_freqjk = 1e-1,
+                               detuning_ij = 0,
+                               detuning_jk = 0,
                                t_start=0,
                                phi=0
                                ):
-        amp_ij = Rabi_freq0 / np.abs(self.n_tabel[i, j])
-        amp_jk = Rabi_freq0 / np.abs(self.n_tabel[j, k])
+        amp_ij = Rabi_freqij / np.abs(self.n_tabel[i, j])
+        amp_jk = Rabi_freqjk / np.abs(self.n_tabel[j, k])
         drive_terms = [
             DriveTerm(
                 driven_op=qutip.Qobj(
                     self.fluxonium.n_operator(energy_esys=True)),
                 pulse_shape_func=STIRAP_with_modulation,
-                pulse_id='stoke',
+                pulse_id='stoke',  # Stoke is the first pulse, pump is the second
                 pulse_shape_args_without_id={
-                    'w_d': np.abs(self.evals[k]-self.evals[j]),  # Without 2pi
+                    'w_d': np.abs(self.evals[k]-self.evals[j]) - detuning_ij,  # Without 2pi
                     'amp': amp_jk,  # Without 2pi
                     't_stop': t_stop,
                     'stoke': True,
@@ -119,7 +122,7 @@ class gfIFQ:
                 pulse_shape_func=STIRAP_with_modulation,
                 pulse_id='pump',
                 pulse_shape_args_without_id={
-                    'w_d': np.abs(self.evals[j]-self.evals[i]),  # Without 2pi
+                    'w_d': np.abs(self.evals[j]-self.evals[i]) - detuning_jk,  # Without 2pi
                     'amp': amp_ij,  # Without 2pi
                     't_stop': t_stop,
                     'stoke': False,
