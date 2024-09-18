@@ -67,8 +67,10 @@ class DriveTerm:
         else:
             self.pulse_shape_args_with_id[f"{key}"] = value
     
-    def visualize(self,ax,tlist,args):
-        ax.plot(tlist, self.pulse_shape_func_with_id(tlist,args),label = self.pulse_id)
+    def visualize(self,ax,tlist,args,alpha=1,color=None):
+        if color is None:
+            color = 'blue'
+        ax.plot(tlist, self.pulse_shape_func_with_id(tlist,args),label = self.pulse_id,alpha=alpha,color = color)
         ax.text(tlist[int(len(tlist)/3)], 2*np.pi* 0.99* self.pulse_shape_args['amp'],f"{self.pulse_id} freq: {self.pulse_shape_args['w_d']}")
 
 def square_pulse_with_rise_fall(t,

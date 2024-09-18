@@ -309,31 +309,39 @@ class FluxoniumOscillatorSystem(CoupledSystem):
 
     def __init__(self,
                  computaional_states: str = '1,2',
-                 drive_transition: Tuple[int] = None,
 
-                 EJ: float = 2.33,
-                 EC: float = 0.69,
-                 EL: float = 0.12,
+                 EJ: float = None,
+                 EC: float = None,
+                 EL: float = None,
                  qubit_level: float = 13,
+                
+                qbt: scqubits.Fluxonium = None,
 
+                Er: float = None,
+                osc_level: float = 30,
 
-                 Er: float = 7.16518677,
-                 osc_level: float = 30,
-                 kappa=0.001,
+                osc: scqubits.Oscillator = None,
 
-                 g_strength: float = 0.18,
+                kappa=0.001,
 
-                 products_to_keep: List[List[int]] = None,
-                 ):
+                g_strength: float = None,
+
+                products_to_keep: List[List[int]] = None,
+                ):
         '''
         Initialize objects before truncation
         '''
+        if qbt is not None:
+            self.qbt = qbt
+        else:
+            self.qbt = scqubits.Fluxonium(EJ=EJ, EC=EC, EL=EL, flux=0, cutoff=110, truncated_dim=qubit_level)
+        
+        if osc is not None:
+            self.osc = osc
+        else:
+            # l_osc should have been 1/sqrt(2), otherwise I'm effectively reducing the coupling strength by sqrt(2)
+            self.osc = scqubits.Oscillator(E_osc=Er, truncated_dim=osc_level, l_osc=1.0)
 
-        self.qbt = scqubits.Fluxonium(
-            EJ=EJ, EC=EC, EL=EL, flux=0, cutoff=110, truncated_dim=qubit_level)
-        # l_osc should have been 1/sqrt(2), otherwise I'm effectively reducing the coupling strength by sqrt(2)
-        self.osc = scqubits.Oscillator(
-            E_osc=Er, truncated_dim=osc_level, l_osc=1.0)
         # https://scqubits.readthedocs.io/en/latest/api-doc/_autosummary/scqubits.core.oscillator.Oscillator.html#scqubits.core.oscillator.Oscillator.n_operator
         hilbertspace = scqubits.HilbertSpace([self.qbt, self.osc])
         hilbertspace.add_interaction(
