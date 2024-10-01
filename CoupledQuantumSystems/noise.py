@@ -68,18 +68,29 @@ def first_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=50):
 ############################################################################
 
 
-def diel_spectral_density(omega, EC,temp_in_mK = 20 ,tangent_ref = 1e-5):
+# def diel_spectral_density(omega, EC,temp_in_mK = 20 ,tangent_ref = 1e-5):
+#     beta = 1 / (kB * temp_in_mK * 1e-3)  # 1/eV
+
+#     coth_arg = beta * hbar_in_eVs * np.abs(omega) / 2  # s GHZ
+#     coth_arg *= 1e9  # dimensionless
+#     return_val = np.where(omega < 0, 
+#                           1/2 * np.abs( 1 / np.tanh(coth_arg) - 1) , 
+#                           1/2 * np.abs( 1 / np.tanh(coth_arg) + 1) )
+
+#     omega_ref = 2*np.pi *6 # GHz
+#     epsilon = 0.15
+#     Q_cap = 1/(  2* tangent_ref * np.abs(omega/omega_ref)**epsilon ) 
+
+#     return_val *= hbar * np.abs(omega)**2   / (4 * EC * Q_cap)  # GHZ^2/GHZ = GHZ
+#     return return_val
+
+
+def diel_spectral_density(omega, EC,temp_in_mK = 20 ,Q_cap = 1e5):
     beta = 1 / (kB * temp_in_mK * 1e-3)  # 1/eV
 
-    coth_arg = beta * hbar_in_eVs * np.abs(omega) / 2  # s GHZ
-    coth_arg *= 1e9  # dimensionless
-    return_val = np.where(omega < 0, 
-                          1/2 * np.abs( 1 / np.tanh(coth_arg) - 1) , 
-                          1/2 * np.abs( 1 / np.tanh(coth_arg) + 1) )
-
-    omega_ref = 2*np.pi *6 # GHz
-    epsilon = 0.15
-    Q_cap = 1/(  2* tangent_ref * np.abs(omega/omega_ref)**epsilon ) 
+    x = beta * hbar_in_eVs * omega # s GHZ
+    x *= 1e9  # dimensionless
+    return_val = 1/2 * np.abs( 1 / np.tanh(x/ 2) + 1) 
 
     return_val *= hbar * np.abs(omega)**2   / (4 * EC * Q_cap)  # GHZ^2/GHZ = GHZ
     return return_val
@@ -97,10 +108,10 @@ def one_over_f_spectral_density(omega, EL,one_over_f_flux_noise_amplitude ):
 
 def get_frequency(flux,EJ,EC,EL,i,j):
     qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
-    vals = qbt.eigenvals()
+    vals = qbt.eigenvals(qbt.truncated_dim)
     return np.abs(vals[j]-vals[i])
 
 def get_fluxonium_frequency(flux,EJ,EC,EL,i,j):
     qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
-    vals = qbt.eigenvals()
+    vals = qbt.eigenvals(qbt.truncated_dim)
     return np.abs(vals[j]-vals[i])

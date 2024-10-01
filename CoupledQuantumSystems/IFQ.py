@@ -44,7 +44,7 @@ class gfIFQ:
 
     def get_T1_c_ops(self,
                   temp_in_mK,
-                  loss_tangent_ref,
+                  Q_cap,
                   one_over_f_flux_noise_amplitude) -> None:
         # array element [i,j] means transition rate from j to i
         dielectric_T1_array = np.full(
@@ -61,7 +61,7 @@ class gfIFQ:
                 freq = (self.evals[i]-self.evals[j]) * 2 * np.pi
                 phi_ele = self.phi_tabel[i, j]
                 dielectric_T1_array[j, i] = 1 / (np.abs(phi_ele)**2 * diel_spectral_density(
-                    freq, EC, temp_in_mK, loss_tangent_ref))
+                    freq, EC, temp_in_mK, Q_cap=Q_cap))
                 one_over_f_T1_array[j, i] = 1 / (np.abs(phi_ele)**2 * one_over_f_spectral_density(
                     freq, EL, one_over_f_flux_noise_amplitude))
         with np.errstate(divide='ignore', invalid='ignore'):
