@@ -7,6 +7,7 @@ import qutip
 import scqubits
 from typing import List, Union, Tuple
 from functools import partial
+from tqdm import tqdm
 
 from CoupledQuantumSystems.qobj_manip import generate_single_mapping,truncate_custom,pad_back_custom,dressed_to_2_level_dm
 from CoupledQuantumSystems.drive import DriveTerm
@@ -107,7 +108,8 @@ class CoupledSystem:
                                              states,
                                              products_to_keep,
                                              num_processes=None,
-                                             update_products_to_keep = True):
+                                             update_products_to_keep = True,
+                                             show_progress=False):
         if update_products_to_keep:
             self.set_new_product_to_keep(products_to_keep)
             self.set_new_operators_after_setting_new_product_to_keep()
@@ -139,7 +141,10 @@ class CoupledSystem:
                         sign_multiplier_vector = self.sign_multiplier_vector)
 
         with multiprocessing.Pool(processes=num_processes) as pool:
-            product_states = pool.map(partial_function,states)
+            if show_progress:
+                product_states = list(tqdm(pool.imap(partial_function, states), total=len(states), desc="Processing States"))
+            else:
+                product_states = pool.map(partial_function, states)
 
         return product_states
 
