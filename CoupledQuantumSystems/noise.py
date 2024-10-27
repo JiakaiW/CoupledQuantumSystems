@@ -43,7 +43,7 @@ def T_phi(second_order_derivative, one_over_f_flux_noise_amplitude, first_order_
     return 1/(first_order_part + second_order_part)
 
 
-def second_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=50):
+def second_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=20):
     h = 1e-3
     derivative_old = 0.0
     # print('\n')
@@ -54,9 +54,9 @@ def second_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=50):
         if np.abs(derivative_new - derivative_old) < rtol*np.abs(derivative_old):
             return derivative_new
         derivative_old = derivative_new
-    raise ValueError("Convergence not reached within the maxietam number of iterations")
+    raise ValueError("Convergence not reached within the maximum number of iterations")
 
-def first_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=50):
+def first_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=20):
     h = 1e-3
     derivative_old = 0.0
     # print('\n')
@@ -67,7 +67,7 @@ def first_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=50):
         if np.abs(derivative_new - derivative_old) < rtol * np.abs(derivative_old):
             return derivative_new
         derivative_old = derivative_new
-    raise ValueError("Convergence not reached within the maxietam number of iterations")
+    raise ValueError("Convergence not reached within the maximum number of iterations")
 
 
 ############################################################################
