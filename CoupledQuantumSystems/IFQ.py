@@ -73,6 +73,7 @@ class gfIFQ:
                   one_over_f_flux_noise_amplitude) -> None:
         Tphi_array = np.zeros(shape=(self.truncated_dim,))
         # Tphi
+        Tphi_array[0] = np.inf
         for ql in range(1,self.truncated_dim):
             Tphi_array[ql] = T_phi(
                 second_order_derivative=second_order_derivative(partial(
