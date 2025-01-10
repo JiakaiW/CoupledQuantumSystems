@@ -10,6 +10,10 @@ REQUIREMENTS = [
     "numpy==1.26.4",
     "qutip==4.7.5",
     "scqubits==4.0.0",
+    "loky",
+    "dynamiqs",
+    "optax",
+    "nevergrad"
 ]
 EXTRA_REQUIREMENTS = [
 
