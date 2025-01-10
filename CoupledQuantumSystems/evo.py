@@ -38,6 +38,7 @@ def ODEsolve_and_post_process(
             post_processing_funcs:List=[],
             post_processing_args:List=[],
 
+            print_progress:bool = True,
             file_name: str = None
             ):
     '''
@@ -69,12 +70,11 @@ def ODEsolve_and_post_process(
             c_ops=c_ops,
             e_ops = e_ops,
             args=additional_args,
-            options=qutip.Options(store_states=store_states, nsteps=120000, num_cpus=1),
-            progress_bar = qutip.ui.progressbar.EnhancedTextProgressBar(),
+            options=qutip.Options(store_states=store_states, nsteps=200000, num_cpus=1),
+            progress_bar = qutip.ui.progressbar.EnhancedTextProgressBar() if print_progress else None,
         )
 
     elif method == 'qutip.mcsolve':
-        print("called qutip.mcsolve")
         result = qutip.mcsolve(psi0=y0, 
                             H= H_with_drives,
                             tlist=tlist,
@@ -83,7 +83,7 @@ def ODEsolve_and_post_process(
                             e_ops = e_ops,
                             ntraj = 500,
                             options=qutip.Options(store_states=True,num_cpus = None),
-                            progress_bar = qutip.ui.progressbar.EnhancedTextProgressBar(),
+                            progress_bar = qutip.ui.progressbar.EnhancedTextProgressBar() if print_progress else None,
                             )
     else:
         raise Exception("solver method not supported")
