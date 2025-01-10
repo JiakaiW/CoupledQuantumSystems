@@ -13,7 +13,8 @@ REQUIREMENTS = [
     "loky",
     "dynamiqs",
     "optax",
-    "nevergrad"
+    "nevergrad",
+    "rich"
 ]
 EXTRA_REQUIREMENTS = [
 
