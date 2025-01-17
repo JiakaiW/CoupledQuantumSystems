@@ -115,7 +115,14 @@ def evaluate_candidate(candidate, objective_fn, **kwargs):
         print(f"Error evaluating candidate: {e}")
         return candidate, float('inf')
 
-def run_optimization_with_progress(optimizer, objective_fn, param_names, title, budget, num_workers, show_live=True, **kwargs):
+def run_optimization_with_progress(optimizer, 
+                                   objective_fn, 
+                                   param_names, 
+                                   title, 
+                                   budget, 
+                                   num_workers, 
+                                   show_live=True, 
+                                   **kwargs):
     """
     Generic optimization runner with progress tracking.
     
