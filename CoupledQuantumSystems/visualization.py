@@ -1,4 +1,3 @@
-
 from bidict import bidict
 import ipywidgets as widgets
 from jax import jit, vmap

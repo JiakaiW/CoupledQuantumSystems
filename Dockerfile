@@ -1,8 +1,8 @@
 FROM python:3.10
 
 RUN apt-get update\
-  && apt-get install \
-        gcc 
+  # && apt-get install \
+  #       gcc 
 
 RUN pip3 install git+https://github.com/JiakaiW/CoupledQuantumSystems
 
