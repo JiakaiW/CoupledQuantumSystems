@@ -449,16 +449,17 @@ class gfIFQ:
                     )
                     futures[future] = (i, j)  # store both indices
 
+            results = [[None for _ in range(m)] for _ in range(n)]
             # Collect results and organize them
             if show_multithread_progress:
                 from tqdm import tqdm
-                for future in tqdm(concurrent.futures.as_completed(futures), total=m*n, desc="Processing simulations"):
-                    i, j = futures[future]
-                    results[i].append(future.result())
+                futures_list = list(futures.items())
+                for future, (i, j) in tqdm(futures_list, total=m*n, desc="Processing simulations"):
+                    results[i][j] = future.result()
             else:
-                for future in concurrent.futures.as_completed(futures):
-                    i, j = futures[future]
-                    results[i].append(future.result())
+                futures_list = list(futures.items())
+                for future, (i, j) in futures_list:
+                    results[i][j] = future.result()
                 
         return results
     
