@@ -370,34 +370,95 @@ class gfIFQ:
         return drive_terms
 
     def run_qutip_mesolve_parrallel(self,
-                                    initial_states: qutip.Qobj,
-                                    tlist: np.array,
-                                    drive_terms: List[DriveTerm],
+                                    initial_states: Union[qutip.Qobj,
+                                                         np.ndarray[qutip.Qobj]], # Can be the same for all calls, or different for each call
+                                    tlist: Union[np.array, 
+                                                 List[np.array]], # Can be the same for all calls, or different for each call
+                                    drive_terms: Union[List[DriveTerm],
+                                                       List[List[DriveTerm]]], # Can be the same for all calls, or different for each call
                                     c_ops: Union[None,
-                                                 List[qutip.Qobj]] = None,
+                                                 List[qutip.Qobj],
+                                                 List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
                                     e_ops: Union[None,
-                                                 List[qutip.Qobj]] = None,
-                                    post_processing=None,  # Currently I have no post_processing written
+                                                 List[qutip.Qobj],
+                                                 List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
+                                    post_processing_funcs=None,  # Currently I have no post_processing written
+                                    post_processing_args=None,  # Currently I have no post_processing written
+                                    show_progress=False,
                                     ) -> None:
+        '''
+        m = len(initial_states)  
+          
+
+        n = num_types_of_evo 
+          = shape(tlist)[0] if tlist is 2d
+          = len(drive_terms) if drive_terms is List[List[DriveTerm]]
+          = len(c_ops) if c_ops is List[List[qutip.Qobj]] and not None
+          = len(e_ops) if e_ops is List[List[qutip.Qobj]] and not None
+        This function calls ODEsolve_and_post_process for m * n times, returning n Lists of results, each containing m evolution results 
+        '''
+        if isinstance(initial_states, qutip.Qobj):
+            m = 1
+            initial_states = [initial_states]
+        else:
+            m = len(initial_states)
+
+        if isinstance(tlist, List) and not (isinstance(tlist[0], List) or isinstance(tlist[0], np.ndarray)): # only one type of evolution
+            tlist = np.array([tlist])
+            n = 1
+            assert isinstance(drive_terms[0], DriveTerm)  # drive_terms is a 1D list of DriveTerm
+            drive_terms = [drive_terms]
+            assert isinstance(c_ops[0], qutip.Qobj)  # c_ops is a 1D list of qutip.Qobj
+            c_ops = [c_ops]
+            assert isinstance(e_ops[0], qutip.Qobj)  # e_ops is a 1D list of qutip.Qobj
+            e_ops = [e_ops]
+        else:
+            n = len(tlist)
+            # Check if drive_terms is a 2D list of DriveTerm
+            assert isinstance(drive_terms, list) and all(isinstance(sublist, list) and all(isinstance(term, DriveTerm) for term in sublist) for sublist in drive_terms)
+            if c_ops is not None:
+                # Check if c_ops is a 2D list of qutip.Qobj
+                assert isinstance(c_ops, list) and all(isinstance(sublist, list) and all(isinstance(op, qutip.Qobj) for op in sublist) for sublist in c_ops)
+            else:
+                c_ops = [None for _ in range(n)]
+            # Check if e_ops is a 2D list of qutip.Qobj
+            assert isinstance(e_ops, list) and all(isinstance(sublist, list) and all(isinstance(op, qutip.Qobj) for op in sublist) for sublist in e_ops)
+            assert len(drive_terms) == len(c_ops) == len(e_ops) == n
 
         post_processing_funcs = []
         post_processing_args = []
-        results = [None] * len(initial_states)
+        results = [[] for _ in range(n)]  # n lists to store m results each
+        
         with get_reusable_executor(max_workers=None, context='loky') as executor:
-            futures = {executor.submit(ODEsolve_and_post_process,
-                                       y0=initial_states[i],
-                                       tlist=tlist,
-                                       static_hamiltonian=self.diag_hamiltonian,
-                                       drive_terms=drive_terms,
-                                       c_ops=c_ops,
-                                       e_ops=e_ops,
-                                       post_processing_funcs=post_processing_funcs,
-                                       post_processing_args=post_processing_args,
-                                       ): i for i in range(len(initial_states))}
+            futures = {}
+            # Generate m*n jobs using nested loops
+            for i in range(n):  # for each type of evolution
+                for j in range(m):  # for each initial state
+                    future = executor.submit(
+                        ODEsolve_and_post_process,
+                        y0=initial_states[j],
+                        tlist=tlist[i],
+                        static_hamiltonian=self.diag_hamiltonian,
+                        drive_terms=drive_terms[i],
+                        c_ops=c_ops[i],
+                        e_ops=e_ops[i],
+                        post_processing_funcs=post_processing_funcs,
+                        post_processing_args=post_processing_args,
+                        print_progress=False if show_progress else True,
+                    )
+                    futures[future] = (i, j)  # store both indices
 
-            for future in concurrent.futures.as_completed(futures):
-                original_index = futures[future]
-                results[original_index] = future.result()
+            # Collect results and organize them
+            if show_progress:
+                from tqdm import tqdm
+                for future in tqdm(concurrent.futures.as_completed(futures), total=m*n, desc="Processing simulations"):
+                    i, j = futures[future]
+                    results[i].append(future.result())
+            else:
+                for future in concurrent.futures.as_completed(futures):
+                    i, j = futures[future]
+                    results[i].append(future.result())
+                
         return results
     
 def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
