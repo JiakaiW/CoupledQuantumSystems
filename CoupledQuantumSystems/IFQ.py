@@ -384,7 +384,8 @@ class gfIFQ:
                                                  List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
                                     post_processing_funcs=None,  # Currently I have no post_processing written
                                     post_processing_args=None,  # Currently I have no post_processing written
-                                    show_progress=False,
+                                    show_multithread_progress=False,
+                                    show_each_thread_progress=False,
                                     ) -> None:
         '''
         m = len(initial_states)  
@@ -444,12 +445,12 @@ class gfIFQ:
                         e_ops=e_ops[i],
                         post_processing_funcs=post_processing_funcs,
                         post_processing_args=post_processing_args,
-                        print_progress=False if show_progress else True,
+                        print_progress=show_each_thread_progress,
                     )
                     futures[future] = (i, j)  # store both indices
 
             # Collect results and organize them
-            if show_progress:
+            if show_multithread_progress:
                 from tqdm import tqdm
                 for future in tqdm(concurrent.futures.as_completed(futures), total=m*n, desc="Processing simulations"):
                     i, j = futures[future]
