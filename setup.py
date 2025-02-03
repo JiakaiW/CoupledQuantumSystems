@@ -11,8 +11,8 @@ REQUIREMENTS = [
     "qutip==4.7.5",
     "scqubits==4.0.0",
     "loky",
-    "dynamiqs",
-    "optax",
+    # "dynamiqs",
+    # "optax",
     "nevergrad",
     "rich"
 ]
