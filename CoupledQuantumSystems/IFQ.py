@@ -404,12 +404,12 @@ class gfIFQ:
         else:
             m = len(initial_states)
 
-        if isinstance(tlist, List) and not (isinstance(tlist[0], List) or isinstance(tlist[0], np.ndarray)): # only one type of evolution
+        if  isinstance(tlist, np.ndarray): # only one type of evolution
             tlist = np.array([tlist])
             n = 1
             assert isinstance(drive_terms[0], DriveTerm)  # drive_terms is a 1D list of DriveTerm
             drive_terms = [drive_terms]
-            assert isinstance(c_ops[0], qutip.Qobj)  # c_ops is a 1D list of qutip.Qobj
+            assert c_ops is None or isinstance(c_ops[0], qutip.Qobj)  # c_ops is a 1D list of qutip.Qobj
             c_ops = [c_ops]
             assert isinstance(e_ops[0], qutip.Qobj)  # e_ops is a 1D list of qutip.Qobj
             e_ops = [e_ops]
