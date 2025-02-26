@@ -418,6 +418,83 @@ class FluxoniumTransmonSystem(CoupledSystem):
                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
 
 
+
+class TransmonOscillatorSystem(CoupledSystem):
+    def __init__(self,
+                 EJ: float = None,
+                 EC: float = None,
+                 ng: float = None,
+                ncut=50,
+                qbt: scqubits.Transmon = None,
+
+                Er: float = None,
+                osc_level: float = 30,
+
+                osc: scqubits.Oscillator = None,
+
+                kappa=0.01,
+
+                g_strength: float = None,
+
+                products_to_keep: List[List[int]] = None,
+                ):
+        '''
+        Initialize objects before truncation
+        '''
+        if qbt is not None:
+            self.qbt = qbt
+        else:
+            self.qbt = scqubits.Transmon(EJ=EJ, EC=EC, ng=ng,ncut=ncut)
+        
+        if osc is not None:
+            self.osc = osc
+        else:
+            # l_osc should have been 1/sqrt(2), otherwise I'm effectively reducing the coupling strength by sqrt(2)
+            self.osc = scqubits.Oscillator(E_osc=Er, truncated_dim=osc_level, l_osc=1.0)
+
+        # https://scqubits.readthedocs.io/en/latest/api-doc/_autosummary/scqubits.core.oscillator.Oscillator.html#scqubits.core.oscillator.Oscillator.n_operator
+        hilbertspace = scqubits.HilbertSpace([self.qbt, self.osc])
+        hilbertspace.add_interaction(
+            g_strength=g_strength, op1=self.qbt.n_operator, op2=self.osc.n_operator, add_hc=False)  # Edited
+
+        super().__init__(hilbertspace=hilbertspace,
+                         products_to_keep=products_to_keep,
+                         qbt_position=0,
+                         computaional_states=[0,1])
+
+        self.a = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
+            self.osc.annihilation_operator)[:, :])
+        self.kappa = kappa
+        self.set_new_operators_after_setting_new_product_to_keep()
+
+    def set_new_operators_after_setting_new_product_to_keep(self):
+        self.a_trunc = self.truncate_function(self.a)
+        # self.truncate_function(self.hilbertspace.op_in_dressed_eigenbasis(self.osc.n_operator))
+        self.driven_operator = self.a_trunc + self.a_trunc.dag()
+        self.set_new_kappa(self.kappa)
+
+    def set_new_kappa(self, kappa):
+        self.kappa = kappa
+        self.c_ops = [np.sqrt(self.kappa) * self.a_trunc]
+
+    def get_ladder_overlap_arr(self,resonator_creation_arr):
+        # resonator_creation_arr should be an id padded arr
+        # each row (first index) is a dressed ket in product basis
+        evecs_arr_row_dressed_ket = scqubits.utils.spectrum_utils.convert_evecs_to_ndarray(self.evecs)
+        # now each column (second index) is a dressed ket in product basis
+        evecs_arr_column_dressed_ket = evecs_arr_row_dressed_ket.T
+        # each column is a dressed state after creation in product basis
+        evecs_after_creation_arr_column_dressed_ket = resonator_creation_arr @ evecs_arr_column_dressed_ket
+        denominator_1d = np.sum(np.abs(evecs_after_creation_arr_column_dressed_ket) ** 2, axis=0)
+        # (row i, column j) is the overlap between i and creation@j
+        numerator = evecs_arr_row_dressed_ket.conj() @ evecs_after_creation_arr_column_dressed_ket
+        # (row i, column j) is the normalized overlap between i and creation@j
+        ladder_overlap = (numerator/denominator_1d)**2
+        ladder_overlap = np.abs(ladder_overlap)
+        return ladder_overlap
+    
+
+
 # class FluxoniumTunableTransmonSystem(CoupledSystem):
 #     '''
 #     To model leakage detection of 12 fluxonium
