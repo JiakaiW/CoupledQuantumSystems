@@ -424,7 +424,8 @@ class TransmonOscillatorSystem(CoupledSystem):
                  EJ: float = None,
                  EC: float = None,
                  ng: float = None,
-                ncut=50,
+                max_ql: int = 50,
+                ncut: int = 50,
                 qbt: scqubits.Transmon = None,
 
                 Er: float = None,
@@ -444,7 +445,7 @@ class TransmonOscillatorSystem(CoupledSystem):
         if qbt is not None:
             self.qbt = qbt
         else:
-            self.qbt = scqubits.Transmon(EJ=EJ, EC=EC, ng=ng,ncut=ncut)
+            self.qbt = scqubits.Transmon(EJ=EJ, EC=EC, ng=ng,max_ql=max_ql,ncut=ncut)
         
         if osc is not None:
             self.osc = osc
