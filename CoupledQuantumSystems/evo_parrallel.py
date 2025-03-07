@@ -32,8 +32,6 @@ def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
     with get_reusable_executor(max_workers=max_workers, context='loky') as executor:
         futures = {}
         for i in range(len(list_of_systems)):
-
-
             post_processing_funcs = []
             post_processing_args = []
             if 'pad_back' in post_processing:

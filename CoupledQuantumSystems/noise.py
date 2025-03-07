@@ -114,11 +114,11 @@ def one_over_f_spectral_density(omega, EL,one_over_f_flux_noise_amplitude ):
 ############################################################################
 
 def get_frequency(flux,EJ,EC,EL,i,j):
-    qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
+    qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=30)
     vals = qbt.eigenvals(qbt.truncated_dim)
     return np.abs(vals[j]-vals[i])
 
-def get_fluxonium_frequency(flux,EJ,EC,EL,i,j):
-    qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=20)
+def get_fluxonium_frequency(flux,EJ,EC,EL,i,j,truncated_dim=30):
+    qbt = scqubits.Fluxonium(EJ = EJ,EC = EC,EL =EL, cutoff = 110,flux = flux,truncated_dim=truncated_dim)
     vals = qbt.eigenvals(qbt.truncated_dim)
     return np.abs(vals[j]-vals[i])
