@@ -82,7 +82,7 @@ class CoupledSystem:
                                 for idx in self.product_to_dressed.values()}
 
 
-        max_index = max(self.sign_multiplier.keys())
+        max_index = len(self.evals)# max(self.sign_multiplier.keys())
         self.sign_multiplier_vector = np.zeros(max_index + 1, dtype=int)
         for index, sign in self.sign_multiplier.items():
             self.sign_multiplier_vector[index] = sign
