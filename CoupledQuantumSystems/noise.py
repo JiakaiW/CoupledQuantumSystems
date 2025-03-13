@@ -23,7 +23,7 @@ temp_in_mK = 20
 ############################################################################
 
 def old_T_phi(second_order_derivative, one_over_f_flux_noise_amplitude, first_order_derivative= 0 ):  # eqn (13) of Peter Groszkowski et al 2018 New J. Phys. 20 043053
-    omega_uv = 3 * 2 * np.pi  # GHz
+    omega_uv = 20 * 2 * np.pi  # GHz
     omega_ir = 1e-9 * 2 * np.pi  # GHz
     t = 10e3  # ns
     A = one_over_f_flux_noise_amplitude  # in unit of Phi0
