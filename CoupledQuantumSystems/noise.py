@@ -35,13 +35,12 @@ def old_T_phi(second_order_derivative, one_over_f_flux_noise_amplitude, first_or
     second_order_part *= (np.log(omega_uv / omega_ir)**2 + 2 * np.log(omega_ir * t)**2)  # GHZ^2
     return (first_order_part + second_order_part)  **(-1/2)  # ns
 
-def T_phi(second_order_derivative, one_over_f_flux_noise_amplitude, first_order_derivative= 0 ): # From the bifluxon tunneling paper
-    sqrt_A = one_over_f_flux_noise_amplitude  # in unit of Phi0
+def T_phi(second_order_derivative, one_over_f_flux_noise_amplitude, first_order_derivative= 0 ):
+    A = one_over_f_flux_noise_amplitude  # in unit of Phi0
 
-    first_order_part = np.sqrt(sqrt_A**2 *np.log(2)) * np.abs(first_order_derivative)
-    second_order_part = np.pi/2 * sqrt_A**2 * np.abs(second_order_derivative)
+    first_order_part = A * np.sqrt(np.log(2)) * np.abs(first_order_derivative)
+    second_order_part =  A**2 * np.abs(second_order_derivative)
     return 1/(first_order_part + second_order_part)
-
 
 def second_order_derivative(f, x0, rtol=1e-3, atol=1e-4, max_iter=20):
     h = 1e-3
