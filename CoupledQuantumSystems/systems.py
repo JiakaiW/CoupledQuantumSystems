@@ -418,6 +418,101 @@ class FluxoniumTransmonSystem(CoupledSystem):
                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
 
 
+class FFTSystem(CoupledSystem):
+    '''
+    To model leakage detection of 12 fluxonium
+    '''
+
+    def __init__(self,
+                 fluxonium1: scqubits.Fluxonium,
+                 fluxonium2: scqubits.Fluxonium,
+                 transmon: scqubits.Transmon,
+                 computaional_states: str,  # = '0,1' or '1,2'
+
+                 g_f1f2: float = 0.1,
+                 g_f1t: float = 0.1,
+                 g_f2t:float=0.1,
+                 products_to_keep: List[List[int]] = None,
+                 ):
+
+        self.fluxonium1 = fluxonium1
+        self.fluxonium2 = fluxonium2
+        self.transmon = transmon
+        hilbertspace = scqubits.HilbertSpace(
+            [self.fluxonium1, self.fluxonium2, self.transmon])
+        hilbertspace.add_interaction(
+            g_strength=g_f1f2, op1=self.fluxonium1.n_operator, op2=self.fluxonium2.n_operator, add_hc=False)
+        hilbertspace.add_interaction(
+            g_strength=g_f1t, op1=self.fluxonium1.n_operator, op2=self.transmon.n_operator, add_hc=False)
+        hilbertspace.add_interaction(
+            g_strength=g_f2t, op1=self.fluxonium2.n_operator, op2=self.transmon.n_operator, add_hc=False)
+
+        super().__init__(hilbertspace=hilbertspace,
+                         products_to_keep=products_to_keep,
+                         qbt_position=0,# let's use an arbitrary choice of qbt_position here.
+                         computaional_states=[int(computaional_states[0]), int(computaional_states[-1])],# computaional_states here is also arbitraray, since it's only used to generate filtered_product_to_dressed to take out the computational subspace of the qubit in post-processing.
+                         )
+    
+    def get_SATD_CZ_drive_terms(self,
+                               ):
+        def P(x):
+            return 6*(2*x)**5-15*(2*x)**4+10*(2*x)**3
+        def theta(t,tg):
+            t_over_tg = t/tg
+            if t_over_tg <= 1/2:
+                return np.pi/2*P(t_over_tg)
+            else:
+                return np.pi/2*(1-P(t_over_tg - 1/2))
+        def theta_t_gradient(t,tg):
+            t_over_tg = t/tg
+            # Derivative of P(x)
+            def dP(x):
+                return (960*x**4 - 960*x**3 + 240*x**2)/tg
+
+            if t_over_tg <= 0.5:
+                return (np.pi/2) * dP(t_over_tg)
+            else:
+                return (np.pi/2) * (-dP(t_over_tg - 0.5))
+        def theta_t_curvature(t,tg):
+            t_over_tg = t/tg
+            # Second derivative of P(x)
+            def ddP(x):
+                return (3840*x**3 - 2880*x**2 + 480*x)/tg**2
+
+            if t_over_tg <= 0.5:
+                return (np.pi/2) * ddP(t_over_tg)
+            else:
+                return (np.pi/2) * (-ddP(t_over_tg - 0.5))
+
+        def gamma(gamma_0,t_over_tg):
+            if t_over_tg <= 1/2:
+                return 0
+            else:
+                return gamma_0
+        def Omega_A(t,tg,Omega_0):
+            return Omega_0*np.sin(theta(t/tg))
+        def Omega_B(t,tg,Omega_0,gamma_0):
+            return Omega_0*np.cos(theta(t/tg))*np.exp(1j*gamma(gamma_0,t/tg))
+        def Omega_A_tilde(t,tg,Omega_0):
+            return Omega_0*()
+        def Omega_B_tilde(t,tg,Omega_0,gamma_0):
+            return Omega_0*np.sin(theta(t/tg))*np.exp(1j*gamma(gamma_0,t/tg))
+        def SATD_coupler_modulation(t,args):
+            pass
+        drive_terms = [
+            DriveTerm(
+                driven_op=qutip.Qobj(
+                    self.transmon.cos_phi_operator(energy_esys=True)),
+                pulse_shape_func=SATD_coupler_modulation,
+                pulse_id='SATD',  # Stoke is the first pulse, pump is the second
+                pulse_shape_args={
+                    'w_d': None,
+                    
+                },
+            ),
+            
+        ]
+        return drive_terms
 
 class TransmonOscillatorSystem(CoupledSystem):
     def __init__(self,
@@ -494,71 +589,6 @@ class TransmonOscillatorSystem(CoupledSystem):
         ladder_overlap = np.abs(ladder_overlap)
         return ladder_overlap
     
-
-
-# class FluxoniumTunableTransmonSystem(CoupledSystem):
-#     '''
-#     To model leakage detection of 12 fluxonium
-#     '''
-
-#     def __init__(self,
-#                  fluxonium: scqubits.Fluxonium,
-#                  tune_tmon: scqubits.TunableTransmon,
-
-
-#                  computaional_states: str,  # = '0,1' or '1,2'
-
-#                  g_strength: float = 0.18,
-
-#                  products_to_keep: List[List[int]] = None,
-#                  w_d: float = None
-#                  ):
-#         '''
-#         Initialize objects before truncation
-#         '''
-
-#         self.fluxonium = fluxonium
-#         self.tune_tmon = tune_tmon
-#         hilbertspace = scqubits.HilbertSpace([self.fluxonium, self.tune_tmon])
-#         hilbertspace.add_interaction(
-#             g_strength=g_strength, op1=self.fluxonium.n_operator, op2=self.tune_tmon.n_operator, add_hc=False)
-
-#         super().__init__(hilbertspace=hilbertspace,
-#                          products_to_keep=products_to_keep,
-#                          qbt_position=0,
-#                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
-
-
-# class FluxoniumFluxoniumSystem(CoupledSystem):
-#     '''
-#     To model leakage detection of 12 fluxonium
-#     '''
-
-#     def __init__(self,
-#                  fluxonium1: scqubits.Fluxonium,
-#                  fluxonium2: scqubits.Fluxonium,
-#                  computaional_states: str,  # = '0,1' or '1,2'
-
-#                  g_strength: float = 0.18,
-
-#                  products_to_keep: List[List[int]] = None,
-#                  w_d: float = None
-#                  ):
-#         '''
-#         Initialize objects before truncation
-#         '''
-
-#         self.fluxonium1 = fluxonium1
-#         self.fluxonium2 = fluxonium2
-#         hilbertspace = scqubits.HilbertSpace(
-#             [self.fluxonium1, self.fluxonium2])
-#         hilbertspace.add_interaction(
-#             g_strength=g_strength, op1=self.fluxonium1.n_operator, op2=self.fluxonium2.n_operator, add_hc=False)
-
-#         super().__init__(hilbertspace=hilbertspace,
-#                          products_to_keep=products_to_keep,
-#                          qbt_position=0,
-#                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
 
 # class FluxoniumOscillatorFilterSystem(CoupledSystem):
 #     '''
