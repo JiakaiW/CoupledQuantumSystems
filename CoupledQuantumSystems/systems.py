@@ -159,6 +159,7 @@ class CoupledSystem:
                                                  List[qutip.Qobj]] = None,
 
                                     post_processing=['pad_back'],
+                                    print_progress:bool = True,
                                     ):
         '''
         This function runs mesolve on multiple initial states using multi-processing,
@@ -193,6 +194,7 @@ class CoupledSystem:
                                        e_ops=e_ops,
                                        post_processing_funcs=post_processing_funcs,
                                        post_processing_args=post_processing_args,
+                                       print_progress=print_progress,
                                        ): i for i in range(len(initial_states))}
 
             for future in concurrent.futures.as_completed(futures):
