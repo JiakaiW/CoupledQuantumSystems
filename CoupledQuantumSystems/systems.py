@@ -43,8 +43,8 @@ class QuantumSystem:
                                                  List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
                                     post_processing_funcs=[],  # Currently I have no post_processing written
                                     post_processing_args=[],  # Currently I have no post_processing written
-                                    show_multithread_progress=False,
                                     show_each_thread_progress=False,
+                                    show_multithread_progress=False,
                                     ) -> Union[List[Any],
                                                 List[List[Any]]]:
         '''
@@ -80,12 +80,20 @@ class QuantumSystem:
 
         if isinstance(tlist, np.ndarray): # only one type of evolution
             num_hamiltonian_tlist = 1
+        else:
+            num_hamiltonian_tlist = len(tlist)
         if isinstance(drive_terms[0], DriveTerm):
             num_hamiltonian_drive_terms = 1
+        else:
+            num_hamiltonian_drive_terms = len(drive_terms)
         if c_ops is None or isinstance(c_ops[0], qutip.Qobj): # The order matters. Otherwise 'NoneType' object is not subscriptable
             num_hamiltonian_c_ops = 1
+        else:
+            num_hamiltonian_c_ops = len(c_ops)
         if e_ops is None or isinstance(e_ops[0], qutip.Qobj):
             num_hamiltonian_e_ops = 1
+        else:
+            num_hamiltonian_e_ops = len(e_ops)
 
 
         if 1 == num_hamiltonian_tlist == num_hamiltonian_drive_terms == num_hamiltonian_c_ops == num_hamiltonian_e_ops:
@@ -285,7 +293,8 @@ class CoupledSystem(QuantumSystem):
     def run_qutip_mesolve_parrallel(self,
                                     initial_states: qutip.Qobj,  # truncated initial states
                                     tlist: np.array,
-                                    drive_terms: List[DriveTerm],
+                                    drive_terms: Union[List[DriveTerm],
+                                                       List[List[DriveTerm]]],
                                     c_ops: Union[None,
                                                  List[qutip.Qobj]] = None,
                                     e_ops: Union[None,
@@ -309,7 +318,15 @@ class CoupledSystem(QuantumSystem):
                                         self.sign_multiplier,
                                         None
                                         ))
-        return super().run_qutip_mesolve_parrallel(initial_states, tlist, drive_terms, c_ops, e_ops, post_processing_funcs, post_processing_args, show_each_thread_progress, show_multithread_progress)
+        return super().run_qutip_mesolve_parrallel(initial_states=initial_states, 
+                                                   tlist=tlist, 
+                                                   drive_terms=drive_terms, 
+                                                   c_ops=c_ops, 
+                                                   e_ops=e_ops, 
+                                                   post_processing_funcs=post_processing_funcs, 
+                                                   post_processing_args=post_processing_args, 
+                                                   show_each_thread_progress=show_each_thread_progress, 
+                                                   show_multithread_progress=show_multithread_progress)
 
     
 
