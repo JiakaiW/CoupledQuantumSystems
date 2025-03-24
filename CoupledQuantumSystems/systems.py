@@ -309,29 +309,8 @@ class CoupledSystem(QuantumSystem):
                                         self.sign_multiplier,
                                         None
                                         ))
-        super().run_qutip_mesolve_parrallel(initial_states, tlist, drive_terms, c_ops, e_ops, post_processing_funcs, post_processing_args, show_each_thread_progress, show_multithread_progress)
+        return super().run_qutip_mesolve_parrallel(initial_states, tlist, drive_terms, c_ops, e_ops, post_processing_funcs, post_processing_args, show_each_thread_progress, show_multithread_progress)
 
-
-        results = [None] * len(initial_states)
-        with get_reusable_executor(max_workers=None, context='loky') as executor:
-            futures = {executor.submit(ODEsolve_and_post_process,
-                                       y0=initial_states[i],
-                                       tlist=tlist,
-
-                                       static_hamiltonian=self.diag_hamiltonian,
-                                       drive_terms=drive_terms,
-                                       c_ops=c_ops,
-                                       e_ops=e_ops,
-                                       post_processing_funcs=post_processing_funcs,
-                                       post_processing_args=post_processing_args,
-                                       print_progress=print_progress,
-                                       ): i for i in range(len(initial_states))}
-
-            for future in concurrent.futures.as_completed(futures):
-                original_index = futures[future]
-                results[original_index] = future.result()
-
-        return results
     
 
     def run_dq_mesolve_parrallel(self,
