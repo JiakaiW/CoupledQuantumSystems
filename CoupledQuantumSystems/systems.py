@@ -78,7 +78,7 @@ class QuantumSystem:
         num_hamiltonian_c_ops = 1
         num_hamiltonian_e_ops = 1
 
-        if  isinstance(tlist, np.ndarray): # only one type of evolution
+        if isinstance(tlist, np.ndarray): # only one type of evolution
             num_hamiltonian_tlist = 1
         if isinstance(drive_terms[0], DriveTerm):
             num_hamiltonian_drive_terms = 1
@@ -86,8 +86,14 @@ class QuantumSystem:
             num_hamiltonian_c_ops = 1
         if e_ops is None or isinstance(e_ops[0], qutip.Qobj):
             num_hamiltonian_e_ops = 1
+
+
         if 1 == num_hamiltonian_tlist == num_hamiltonian_drive_terms == num_hamiltonian_c_ops == num_hamiltonian_e_ops:
             num_hamiltonian = 1
+            tlist = [tlist for _ in range(num_init_states)]
+            drive_terms = [drive_terms for _ in range(num_init_states)]
+            c_ops = [c_ops for _ in range(num_init_states)]
+            e_ops = [e_ops for _ in range(num_init_states)]
         else:
             num_hamiltonian = np.max([num_hamiltonian_tlist, num_hamiltonian_drive_terms, num_hamiltonian_c_ops, num_hamiltonian_e_ops])
 
