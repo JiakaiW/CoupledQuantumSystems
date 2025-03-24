@@ -82,9 +82,9 @@ class QuantumSystem:
             num_hamiltonian_tlist = 1
         if isinstance(drive_terms[0], DriveTerm):
             num_hamiltonian_drive_terms = 1
-        if isinstance(c_ops[0], qutip.Qobj) or c_ops is None:
+        if c_ops is None or isinstance(c_ops[0], qutip.Qobj): # The order matters. Otherwise 'NoneType' object is not subscriptable
             num_hamiltonian_c_ops = 1
-        if isinstance(e_ops[0], qutip.Qobj) or e_ops is None:
+        if e_ops is None or isinstance(e_ops[0], qutip.Qobj):
             num_hamiltonian_e_ops = 1
         if 1 == num_hamiltonian_tlist == num_hamiltonian_drive_terms == num_hamiltonian_c_ops == num_hamiltonian_e_ops:
             num_hamiltonian = 1
