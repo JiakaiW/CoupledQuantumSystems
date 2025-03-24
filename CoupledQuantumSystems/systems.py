@@ -45,6 +45,7 @@ class QuantumSystem:
                                     post_processing_args=[],  # Currently I have no post_processing written
                                     show_each_thread_progress=False,
                                     show_multithread_progress=False,
+                                    store_states = True,
                                     ) -> Union[List[Any],
                                                 List[List[Any]]]:
         '''
@@ -127,11 +128,12 @@ class QuantumSystem:
 
             assert len(drive_terms) == len(c_ops) == len(e_ops) == num_hamiltonian
 
-        results = [[] for _ in range(num_hamiltonian)]
-        
         with get_reusable_executor(max_workers=None, context='loky') as executor:
+            # Initialize results matrix
+            results = [[None for _ in range(num_init_states)] for _ in range(num_hamiltonian)]
+            
+            # Submit all jobs and collect results as they complete
             futures = {}
-            # Generate m*n jobs using nested loops
             for i in range(num_hamiltonian):  # for each type of evolution
                 for j in range(num_init_states):  # for each initial state
                     future = executor.submit(
@@ -145,20 +147,27 @@ class QuantumSystem:
                         post_processing_funcs=post_processing_funcs,
                         post_processing_args=post_processing_args,
                         print_progress=show_each_thread_progress,
+                        store_states = store_states,
                     )
                     futures[future] = (i, j)  # store both indices
 
-            results = [[None for _ in range(num_init_states)] for _ in range(num_hamiltonian)]
-            # Collect results and organize them
+            # Process results as they complete
             if show_multithread_progress:
                 from tqdm import tqdm
-                futures_list = list(futures.items())
-                for future, (i, j) in tqdm(futures_list, total=num_init_states*num_hamiltonian, desc="Processing simulations"):
-                    results[i][j] = future.result()
+                with tqdm(total=num_init_states*num_hamiltonian, desc="Processing simulations") as pbar:
+                    for future in concurrent.futures.as_completed(futures):
+                        i, j = futures[future]
+                        results[i][j] = future.result()
+                        pbar.update(1)
+                        # Remove the completed future to free memory
+                        del futures[future]
             else:
-                futures_list = list(futures.items())
-                for future, (i, j) in futures_list:
+                for future in concurrent.futures.as_completed(futures):
+                    i, j = futures[future]
                     results[i][j] = future.result()
+                    # Remove the completed future to free memory
+                    del futures[future]
+
         if num_hamiltonian == 1:
             return results[0]
         else:
@@ -301,7 +310,9 @@ class CoupledSystem(QuantumSystem):
                                                  List[qutip.Qobj]] = None,
 
                                     post_processing=['pad_back'],
-                                    show_each_thread_progress = True, show_multithread_progress = False,
+                                    show_each_thread_progress = True, 
+                                    show_multithread_progress = False,
+                                    store_states = True,
                                     ):
         post_processing_funcs = []
         post_processing_args = []
@@ -326,7 +337,8 @@ class CoupledSystem(QuantumSystem):
                                                    post_processing_funcs=post_processing_funcs, 
                                                    post_processing_args=post_processing_args, 
                                                    show_each_thread_progress=show_each_thread_progress, 
-                                                   show_multithread_progress=show_multithread_progress)
+                                                   show_multithread_progress=show_multithread_progress,
+                                                   store_states=store_states)
 
     
 
