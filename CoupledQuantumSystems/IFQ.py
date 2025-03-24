@@ -9,6 +9,7 @@ from CoupledQuantumSystems.drive import *
 from CoupledQuantumSystems.evo import ODEsolve_and_post_process
 from CoupledQuantumSystems.noise import *
 from CoupledQuantumSystems.qobj_manip import *
+from CoupledQuantumSystems.systems import QuantumSystem
 
 
 '''
@@ -23,7 +24,7 @@ Gate simulation takes these inputs: hamiltonian, with decay/dephasing rates eval
 '''
 
 
-class gfIFQ:
+class gfIFQ(QuantumSystem):
     def __init__(self,
                  EJ,
                  EC,
@@ -368,100 +369,6 @@ class gfIFQ:
             )
         ]
         return drive_terms
-
-    def run_qutip_mesolve_parrallel(self,
-                                    initial_states: Union[qutip.Qobj,
-                                                         np.ndarray[qutip.Qobj]], # Can be the same for all calls, or different for each call
-                                    tlist: Union[np.array, 
-                                                 List[np.array]], # Can be the same for all calls, or different for each call
-                                    drive_terms: Union[List[DriveTerm],
-                                                       List[List[DriveTerm]]], # Can be the same for all calls, or different for each call
-                                    c_ops: Union[None,
-                                                 List[qutip.Qobj],
-                                                 List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
-                                    e_ops: Union[None,
-                                                 List[qutip.Qobj],
-                                                 List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
-                                    post_processing_funcs=None,  # Currently I have no post_processing written
-                                    post_processing_args=None,  # Currently I have no post_processing written
-                                    show_multithread_progress=False,
-                                    show_each_thread_progress=False,
-                                    ) -> None:
-        '''
-        m = len(initial_states)  
-          
-
-        n = num_types_of_evo 
-          = shape(tlist)[0] if tlist is 2d
-          = len(drive_terms) if drive_terms is List[List[DriveTerm]]
-          = len(c_ops) if c_ops is List[List[qutip.Qobj]] and not None
-          = len(e_ops) if e_ops is List[List[qutip.Qobj]] and not None
-        This function calls ODEsolve_and_post_process for m * n times, returning n Lists of results, each containing m evolution results 
-        '''
-        if isinstance(initial_states, qutip.Qobj):
-            m = 1
-            initial_states = [initial_states]
-        else:
-            m = len(initial_states)
-
-        if  isinstance(tlist, np.ndarray): # only one type of evolution
-            tlist = np.array([tlist])
-            n = 1
-            assert isinstance(drive_terms[0], DriveTerm)  # drive_terms is a 1D list of DriveTerm
-            drive_terms = [drive_terms]
-            assert c_ops is None or isinstance(c_ops[0], qutip.Qobj)  # c_ops is a 1D list of qutip.Qobj
-            c_ops = [c_ops]
-            assert isinstance(e_ops[0], qutip.Qobj)  # e_ops is a 1D list of qutip.Qobj
-            e_ops = [e_ops]
-        else:
-            n = len(tlist)
-            # Check if drive_terms is a 2D list of DriveTerm
-            assert isinstance(drive_terms, list) and all(isinstance(sublist, list) and all(isinstance(term, DriveTerm) for term in sublist) for sublist in drive_terms)
-            if c_ops is not None:
-                # Check if c_ops is a 2D list of qutip.Qobj
-                assert isinstance(c_ops, list) and all(isinstance(sublist, list) and all(isinstance(op, qutip.Qobj) for op in sublist) for sublist in c_ops)
-            else:
-                c_ops = [None for _ in range(n)]
-            # Check if e_ops is a 2D list of qutip.Qobj
-            assert isinstance(e_ops, list) and all(isinstance(sublist, list) and all(isinstance(op, qutip.Qobj) for op in sublist) for sublist in e_ops)
-            assert len(drive_terms) == len(c_ops) == len(e_ops) == n
-
-        post_processing_funcs = []
-        post_processing_args = []
-        results = [[] for _ in range(n)]  # n lists to store m results each
-        
-        with get_reusable_executor(max_workers=None, context='loky') as executor:
-            futures = {}
-            # Generate m*n jobs using nested loops
-            for i in range(n):  # for each type of evolution
-                for j in range(m):  # for each initial state
-                    future = executor.submit(
-                        ODEsolve_and_post_process,
-                        y0=initial_states[j],
-                        tlist=tlist[i],
-                        static_hamiltonian=self.diag_hamiltonian,
-                        drive_terms=drive_terms[i],
-                        c_ops=c_ops[i],
-                        e_ops=e_ops[i],
-                        post_processing_funcs=post_processing_funcs,
-                        post_processing_args=post_processing_args,
-                        print_progress=show_each_thread_progress,
-                    )
-                    futures[future] = (i, j)  # store both indices
-
-            results = [[None for _ in range(m)] for _ in range(n)]
-            # Collect results and organize them
-            if show_multithread_progress:
-                from tqdm import tqdm
-                futures_list = list(futures.items())
-                for future, (i, j) in tqdm(futures_list, total=m*n, desc="Processing simulations"):
-                    results[i][j] = future.result()
-            else:
-                futures_list = list(futures.items())
-                for future, (i, j) in futures_list:
-                    results[i][j] = future.result()
-                
-        return results
     
 def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
         list_of_systems: List[gfIFQ],

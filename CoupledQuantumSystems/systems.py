@@ -5,7 +5,7 @@ from loky import get_reusable_executor
 import numpy as np
 import qutip
 import scqubits
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Any
 from functools import partial
 from tqdm import tqdm
 
@@ -22,8 +22,135 @@ from CoupledQuantumSystems.qobj_manip import get_product, get_product_vectorized
 #
 ############################################################################
 
+class QuantumSystem:
+    '''
+    Base class for quantum systems that provides common functionality for running quantum simulations.
+    This class is meant to be inherited by specific quantum system implementations.
+    '''
 
-class CoupledSystem:
+    def run_qutip_mesolve_parrallel(self,
+                                    initial_states: Union[qutip.Qobj,
+                                                         np.ndarray[qutip.Qobj]], # Can be the same for all calls, or different for each call
+                                    tlist: Union[np.array, 
+                                                 List[np.array]], # Can be the same for all calls, or different for each call
+                                    drive_terms: Union[List[DriveTerm],
+                                                       List[List[DriveTerm]]], # Can be the same for all calls, or different for each call
+                                    c_ops: Union[None,
+                                                 List[qutip.Qobj],
+                                                 List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
+                                    e_ops: Union[None,
+                                                 List[qutip.Qobj],
+                                                 List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
+                                    post_processing_funcs=[],  # Currently I have no post_processing written
+                                    post_processing_args=[],  # Currently I have no post_processing written
+                                    show_multithread_progress=False,
+                                    show_each_thread_progress=False,
+                                    ) -> Union[List[Any],
+                                                List[List[Any]]]:
+        '''
+        num_init_states = len(initial_states)  
+          
+
+        num_hamiltonian = 
+          = shape(tlist)[0] if tlist is 2d
+          = len(drive_terms) if drive_terms is List[List[DriveTerm]]
+        if c_ops is a 1d list of qutip.Qobj, 
+        or if e_ops is a 1d list of qutip.Qobj, 
+        or if tlist is a single np.array,
+        or if drive_terms is a 1d list of DriveTerm,
+            then we broadcast them to 2d list (repeat the same operator for all Hamiltonian), as long as one of these inputs indicate multiple Hamiltonians
+
+        if num_hamiltonian == 1:
+            return a 1d list of results
+        else:
+            return a 2d list of results, each containing num_init_states evolution results 
+        '''
+        if isinstance(initial_states, qutip.Qobj):
+            num_init_states = 1
+            initial_states = [initial_states]
+        else:
+            num_init_states = len(initial_states)
+
+        # Now let's check how many Hamiltonians these different inputs indicate
+        num_hamiltonian = 1
+        num_hamiltonian_tlist = 1
+        num_hamiltonian_drive_terms = 1
+        num_hamiltonian_c_ops = 1
+        num_hamiltonian_e_ops = 1
+
+        if  isinstance(tlist, np.ndarray): # only one type of evolution
+            num_hamiltonian_tlist = 1
+        if isinstance(drive_terms[0], DriveTerm):
+            num_hamiltonian_drive_terms = 1
+        if isinstance(c_ops[0], qutip.Qobj) or c_ops is None:
+            num_hamiltonian_c_ops = 1
+        if isinstance(e_ops[0], qutip.Qobj) or e_ops is None:
+            num_hamiltonian_e_ops = 1
+        if 1 == num_hamiltonian_tlist == num_hamiltonian_drive_terms == num_hamiltonian_c_ops == num_hamiltonian_e_ops:
+            num_hamiltonian = 1
+        else:
+            num_hamiltonian = np.max([num_hamiltonian_tlist, num_hamiltonian_drive_terms, num_hamiltonian_c_ops, num_hamiltonian_e_ops])
+
+            # Now broadcast the inputs to 2d list if needed
+            if num_hamiltonian_tlist == 1:
+                tlist = [tlist for _ in range(num_hamiltonian)]
+
+            if num_hamiltonian_drive_terms == 1:
+                drive_terms = [drive_terms for _ in range(num_hamiltonian)]
+            else:
+                # Check if drive_terms is a 2D list of DriveTerm
+                assert isinstance(drive_terms, list) and all(isinstance(sublist, list) and all(isinstance(term, DriveTerm) for term in sublist) for sublist in drive_terms)
+
+            if num_hamiltonian_c_ops == 1:
+                c_ops = [c_ops for _ in range(num_hamiltonian)]
+            else:
+                assert isinstance(c_ops, list) and all(isinstance(sublist, list) and all(isinstance(op, qutip.Qobj) for op in sublist) for sublist in c_ops)
+
+            if num_hamiltonian_e_ops == 1:
+                e_ops = [e_ops for _ in range(num_hamiltonian)]
+            else:
+                assert isinstance(e_ops, list) and all(isinstance(sublist, list) and all(isinstance(op, qutip.Qobj) for op in sublist) for sublist in e_ops)
+
+            assert len(drive_terms) == len(c_ops) == len(e_ops) == num_hamiltonian
+
+        results = [[] for _ in range(num_hamiltonian)]
+        
+        with get_reusable_executor(max_workers=None, context='loky') as executor:
+            futures = {}
+            # Generate m*n jobs using nested loops
+            for i in range(num_hamiltonian):  # for each type of evolution
+                for j in range(num_init_states):  # for each initial state
+                    future = executor.submit(
+                        ODEsolve_and_post_process,
+                        y0=initial_states[j],
+                        tlist=tlist[i],
+                        static_hamiltonian=self.diag_hamiltonian,
+                        drive_terms=drive_terms[i],
+                        c_ops=c_ops[i],
+                        e_ops=e_ops[i],
+                        post_processing_funcs=post_processing_funcs,
+                        post_processing_args=post_processing_args,
+                        print_progress=show_each_thread_progress,
+                    )
+                    futures[future] = (i, j)  # store both indices
+
+            results = [[None for _ in range(num_init_states)] for _ in range(num_hamiltonian)]
+            # Collect results and organize them
+            if show_multithread_progress:
+                from tqdm import tqdm
+                futures_list = list(futures.items())
+                for future, (i, j) in tqdm(futures_list, total=num_init_states*num_hamiltonian, desc="Processing simulations"):
+                    results[i][j] = future.result()
+            else:
+                futures_list = list(futures.items())
+                for future, (i, j) in futures_list:
+                    results[i][j] = future.result()
+        if num_hamiltonian == 1:
+            return results[0]
+        else:
+            return results
+
+class CoupledSystem(QuantumSystem):
     '''
     A parent class for quantum systems involving qubits and oscillators,
 
@@ -93,7 +220,7 @@ class CoupledSystem:
                 product(*[range(dim) for dim in self.hilbertspace.subsystem_dims]))
 
         self.products_to_keep = products_to_keep
-        self.diag_dressed_hamiltonian = self.truncate_function(qutip.Qobj((
+        self.diag_hamiltonian = self.truncate_function(qutip.Qobj((
             2 * np.pi * qutip.Qobj(np.diag(self.evals),
                                    dims=[self.hilbertspace.subsystem_dims] * 2)
         )[:, :]))
@@ -159,13 +286,8 @@ class CoupledSystem:
                                                  List[qutip.Qobj]] = None,
 
                                     post_processing=['pad_back'],
-                                    print_progress:bool = True,
+                                    show_each_thread_progress = True, show_multithread_progress = False,
                                     ):
-        '''
-        This function runs mesolve on multiple initial states using multi-processing,
-          and return a list of qutip.solver.result
-        '''
-
         post_processing_funcs = []
         post_processing_args = []
         if 'pad_back' in post_processing:
@@ -181,6 +303,8 @@ class CoupledSystem:
                                         self.sign_multiplier,
                                         None
                                         ))
+        super().run_qutip_mesolve_parrallel(initial_states, tlist, drive_terms, c_ops, e_ops, post_processing_funcs, post_processing_args, show_each_thread_progress, show_multithread_progress)
+
 
         results = [None] * len(initial_states)
         with get_reusable_executor(max_workers=None, context='loky') as executor:
@@ -188,7 +312,7 @@ class CoupledSystem:
                                        y0=initial_states[i],
                                        tlist=tlist,
 
-                                       static_hamiltonian=self.diag_dressed_hamiltonian,
+                                       static_hamiltonian=self.diag_hamiltonian,
                                        drive_terms=drive_terms,
                                        c_ops=c_ops,
                                        e_ops=e_ops,
@@ -223,7 +347,7 @@ class CoupledSystem:
 
         #     '''
         #     def _H(t):
-        #         _H = jnp.array(self.diag_dressed_hamiltonian)
+        #         _H = jnp.array(self.diag_hamiltonian)
         #         for term in drive_terms:
         #             _H += jnp.array(term.driven_op)* term.pulse_shape_func(t, term.pulse_shape_args)
         #         return _H
@@ -592,67 +716,69 @@ class TransmonOscillatorSystem(CoupledSystem):
         return ladder_overlap
     
 
-# class FluxoniumOscillatorFilterSystem(CoupledSystem):
-#     '''
-#     To model leakage detection of 12 fluxonium with purcell filter
-#     '''
+class FluxoniumOscillatorFilterSystem(CoupledSystem):
+    '''
+    To model leakage detection of 12 fluxonium with purcell filter
 
-#     def __init__(self,
-#                  computaional_states: str,  # = '0,1' or '1,2'
+    !!!!!!!!!!!!! NOT FINISHED !!!!!!!!!!!!!
+    '''
 
-#                  EJ: float = 2.33,
-#                  EC: float = 0.69,
-#                  EL: float = 0.12,
-#                  qubit_level: float = 13,
+    def __init__(self,
+                 computaional_states: str,  # = '0,1' or '1,2'
+
+                 EJ: float = 2.33,
+                 EC: float = 0.69,
+                 EL: float = 0.12,
+                 qubit_level: float = 13,
 
 
-#                  Er: float = 7.16518677,
-#                  osc_level: float = 20,
+                 Er: float = 7.16518677,
+                 osc_level: float = 20,
 
-#                  Ef: float = 7.13,
-#                  filter_level: float = 7,
-#                  # Ef *2pi = omega_f,  kappa_f = omega_f / Q , kappa_f^{-1} = 0.67 ns
-#                  kappa_f=1.5,
+                 Ef: float = 7.13,
+                 filter_level: float = 7,
+                 # Ef *2pi = omega_f,  kappa_f = omega_f / Q , kappa_f^{-1} = 0.67 ns
+                 kappa_f=1.5,
 
-#                  g_strength: float = 0.18,
-#                  # G satisfies a relation with omega_r in equation 10 of Phys. Rev A 92. 012325 (2015)
-#                  G_strength: float = 0.3,
+                 g_strength: float = 0.18,
+                 # G satisfies a relation with omega_r in equation 10 of Phys. Rev A 92. 012325 (2015)
+                 G_strength: float = 0.3,
 
-#                  products_to_keep: List[List[int]] = None,
-#                  w_d: float = None,
-#                  ):
+                 products_to_keep: List[List[int]] = None,
+                 w_d: float = None,
+                 ):
 
-#         # Q_f = 30
-#         # kappa_f = Ef * 2 * np.pi / Q_f
-#         # kappa_r = 0.0001 #we want a really small effective readout resonator decay rate to reduce purcell decay
-#         # G_strength =np.sqrt(kappa_f * kappa_r * ( 1 + (2*(Er-Ef)*2*np.pi/kappa_f )**2 ) /4)
+        # Q_f = 30
+        # kappa_f = Ef * 2 * np.pi / Q_f
+        # kappa_r = 0.0001 #we want a really small effective readout resonator decay rate to reduce purcell decay
+        # G_strength =np.sqrt(kappa_f * kappa_r * ( 1 + (2*(Er-Ef)*2*np.pi/kappa_f )**2 ) /4)
 
-#         self.G_strength = G_strength
+        self.G_strength = G_strength
 
-#         self.qbt = scqubits.Fluxonium(
-#             EJ=EJ, EC=EC, EL=EL, flux=0, cutoff=110, truncated_dim=qubit_level)
-#         self.osc = scqubits.Oscillator(E_osc=Er, truncated_dim=osc_level)
-#         self.filter = scqubits.Oscillator(E_osc=Ef, truncated_dim=filter_level)
-#         hilbertspace = scqubits.HilbertSpace([self.qbt, self.osc, self.filter])
-#         hilbertspace.add_interaction(
-#             g_strength=g_strength, op1=self.qbt.n_operator, op2=self.osc.creation_operator, add_hc=True)
-#         hilbertspace.add_interaction(g_strength=G_strength, op1=self.osc.creation_operator,
-#                                      op2=self.filter.annihilation_operator, add_hc=True)
+        self.qbt = scqubits.Fluxonium(
+            EJ=EJ, EC=EC, EL=EL, flux=0, cutoff=110, truncated_dim=qubit_level)
+        self.osc = scqubits.Oscillator(E_osc=Er, truncated_dim=osc_level)
+        self.filter = scqubits.Oscillator(E_osc=Ef, truncated_dim=filter_level)
+        hilbertspace = scqubits.HilbertSpace([self.qbt, self.osc, self.filter])
+        hilbertspace.add_interaction(
+            g_strength=g_strength, op1=self.qbt.n_operator, op2=self.osc.creation_operator, add_hc=True)
+        hilbertspace.add_interaction(g_strength=G_strength, op1=self.osc.creation_operator,
+                                     op2=self.filter.annihilation_operator, add_hc=True)
 
-#         super().__init__(hilbertspace=hilbertspace,
-#                          products_to_keep=products_to_keep,
-#                          qbt_position=0,
-#                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
+        super().__init__(hilbertspace=hilbertspace,
+                         products_to_keep=products_to_keep,
+                         qbt_position=0,
+                         computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
 
-#         self.a = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
-#             self.osc.annihilation_operator)[:, :])
-#         self.a_trunc = self.truncate_function(self.a)
+        self.a = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
+            self.osc.annihilation_operator)[:, :])
+        self.a_trunc = self.truncate_function(self.a)
 
-#         self.b = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
-#             self.filter.annihilation_operator)[:, :])
-#         self.b_trunc = self.truncate_function(self.b)
-#         self.driven_operator = self.b_trunc+self.b_trunc.dag()
-#         self.c_ops = [np.sqrt(kappa_f) * self.b_trunc]
+        self.b = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
+            self.filter.annihilation_operator)[:, :])
+        self.b_trunc = self.truncate_function(self.b)
+        self.driven_operator = self.b_trunc+self.b_trunc.dag()
+        self.c_ops = [np.sqrt(kappa_f) * self.b_trunc]
 
-#         if w_d != None:
-#             self.w_d = w_d
+        if w_d != None:
+            self.w_d = w_d
