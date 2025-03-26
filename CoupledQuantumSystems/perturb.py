@@ -133,7 +133,7 @@ class Perturbation:
         return op_dressed
 
     @staticmethod
-    def reorder_perturbed_states_and_energies(
+    def reorder_to_energy_basis(
         energies: np.ndarray,
         states: np.ndarray
     ):
@@ -152,6 +152,63 @@ class Perturbation:
         states_sorted = states[:, sort_idx]
 
         return E_sorted, states_sorted
+    
+    @staticmethod
+    def reorder_to_product_basis(
+            energies: np.ndarray,
+            states: np.ndarray,
+            product_basis_energies: np.ndarray,
+        ):
+        """
+        Given:
+        - 'energies' sorted in ascending order,
+        - 'states' whose columns correspond to the sorted energies,
+        - 'product_basis_energies' the original unsorted energies
+            in the product-basis ordering,
+
+        returns 'E_unsorted' and 'states_unsorted', such that
+        E_unsorted[i] == energies_of_state_that_belongs_to product_basis_energies[i],
+        and states_unsorted[:, i] is the corresponding wavefunction.
+
+        In effect, it reverses the ascending-energy sort and returns
+        the arrays in the original product-basis ordering.
+
+        If there are repeated or extremely close energies, we pair them
+        in ascending order by stable matching. That can introduce ambiguities
+        if multiple energies are identical.
+        """
+        dim = len(energies)
+        assert states.shape == (dim, dim), "Dimension mismatch in reorder"
+        assert len(product_basis_energies) == dim, "Mismatch in dimension of product_basis_energies"
+
+        # 1) Sort the pairs (energy, sorted_idx) from smallest to largest energy
+        #    This effectively enumerates 'energies' in ascending order.
+        sorted_energy_pairs = sorted((val, i_sorted) for i_sorted, val in enumerate(energies))
+
+        # 2) Sort the pairs (energy, product_idx) for the original product-basis energies
+        #    in ascending order as well.
+        original_energy_pairs = sorted((val, i_prod) for i_prod, val in enumerate(product_basis_energies))
+
+        # 3) We now assume these sorted lists align one-to-one in ascending order.
+        #    We'll build a mapping: sorted_idx -> product_idx
+        #    i.e., the column i_sorted in 'states' belongs to the row i_prod in the unsorted array.
+        mapping = [None] * dim
+        for (val_sorted, i_sorted), (val_prod, i_prod) in zip(sorted_energy_pairs, original_energy_pairs):
+            # We pair them up. If everything is perfect, val_sorted ≈ val_prod.
+            mapping[i_sorted] = i_prod
+
+        # 4) Using that mapping, re-insert energies and states columns in the product-basis order
+        E_unsorted = np.zeros(dim, dtype=energies.dtype)
+        states_unsorted = np.zeros((dim, dim), dtype=states.dtype)
+
+        for i_sorted in range(dim):
+            i_prod = mapping[i_sorted]
+            E_unsorted[i_prod] = energies[i_sorted]
+            states_unsorted[:, i_prod] = states[:, i_sorted]
+
+        return E_unsorted, states_unsorted
+
+
 
     @staticmethod
     def embed_operator(op: np.ndarray, dims_list: list[int], where_to_embed: int) -> np.ndarray:
