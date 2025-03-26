@@ -1,5 +1,26 @@
 import numpy as np
 
+def operator_in_perturbed_basis(
+    psi_up_to_2: np.ndarray,  # (dim, dim), columns = |psi_n^(up to 2)>
+    op: np.ndarray            # (dim, dim), operator in the original product basis
+) -> np.ndarray:
+    """
+    Compute the matrix elements of `op` in the basis spanned by
+    the columns of `psi_up_to_2`. 
+    (No normalization or re-orthonormalization is performed.)
+
+    Returns:
+        op_dressed: (dim, dim) array = psi_up_to_2^\dagger @ op @ psi_up_to_2
+    """
+    # Check shapes match
+    dim = psi_up_to_2.shape[0]
+    assert op.shape == (dim, dim), "Operator must match dimension of psi_up_to_2"
+    
+    # O_dressed = psi_up_to_2^\dagger @ op @ psi_up_to_2
+    op_dressed = psi_up_to_2.conj().T @ op @ psi_up_to_2
+    return op_dressed
+
+
 def second_order_perturbation_vectorized(
     energies_1: np.ndarray,  # shape (m,)
     energies_2: np.ndarray,  # shape (n,)
