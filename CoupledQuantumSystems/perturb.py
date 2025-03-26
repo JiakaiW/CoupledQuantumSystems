@@ -41,6 +41,12 @@ class Perturbation:
         self._psi_2nd_sorted = None
         self._sort_idx_2nd = None
 
+    @staticmethod
+    def embed_operator(op: np.ndarray, dims_list: list[int], where_to_embed: int) -> np.ndarray:
+        op_list = [np.eye(dim, dtype=op.dtype) for dim in dims_list]
+        op_list[where_to_embed] = op
+        return np.kron(*op_list)
+
 
     def first_order_perturbation(self):
         # check cache
@@ -244,11 +250,6 @@ class Perturbation:
             return E_sorted[inv_idx], psi_sorted[:, inv_idx]
 
 
-    @staticmethod
-    def embed_operator(op: np.ndarray, dims_list: list[int], where_to_embed: int) -> np.ndarray:
-        op_list = [np.eye(dim, dtype=op.dtype) for dim in dims_list]
-        op_list[where_to_embed] = op
-        return np.kron(*op_list)
 
 class TwoBodyPerturbation(Perturbation):
     def __init__(self,         
