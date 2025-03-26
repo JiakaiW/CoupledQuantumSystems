@@ -95,7 +95,7 @@ class Perturbation:
         # Then denom2[m,n] = E0[n] - E0[m], same shape (dim, dim).
         # => c2[m,n] = numerator[m,n] / denom2[m,n] for m != n.
 
-        numerator = self.V @ psi1st  # shape (dim, dim)
+        numerator = self.V @ self._psi_1st  # shape (dim, dim)
         denom2 = E0_row - E0_col
         np.fill_diagonal(denom2, np.inf)
 
@@ -133,7 +133,39 @@ class Perturbation:
         # O_dressed = psi^\dagger @ op @ psi
         return psi.conj().T @ op @ psi
 
-    def reorder_to_energy_basis(self, order="2nd", operator=None):
+    def generate_1st_sorting(self):
+        """Generate sorting indices and sorted arrays for first-order perturbation."""
+        if self._energies_1st is None or self._psi_1st is None:
+            self.first_order_perturbation()
+
+        sort_idx = np.argsort(self._energies_1st)
+        E_sorted = self._energies_1st[sort_idx]
+        psi_sorted = self._psi_1st[:, sort_idx]
+
+        # Cache the results
+        self._sort_idx_1st = sort_idx
+        self._energies_1st_sorted = E_sorted
+        self._psi_1st_sorted = psi_sorted
+
+        return sort_idx, E_sorted, psi_sorted
+
+    def generate_2nd_sorting(self):
+        """Generate sorting indices and sorted arrays for second-order perturbation."""
+        if self._energies_2nd is None or self._psi_2nd is None:
+            self.second_order_perturbation()
+
+        sort_idx = np.argsort(self._energies_2nd)
+        E_sorted = self._energies_2nd[sort_idx]
+        psi_sorted = self._psi_2nd[:, sort_idx]
+
+        # Cache the results
+        self._sort_idx_2nd = sort_idx
+        self._energies_2nd_sorted = E_sorted
+        self._psi_2nd_sorted = psi_sorted
+
+        return sort_idx, E_sorted, psi_sorted
+
+    def reorder_to_energy_basis(self, operator=None, order="2nd"):
         """
         Sorts either the first- or second-order energies & wavefunctions
         by ascending energy, and caches the sorted versions plus the sort index.
@@ -152,55 +184,22 @@ class Perturbation:
             or
             (E_sorted, psi_sorted)  # if no operator is provided
         """
-        # Decide which caches to look at
         if order == "1st":
-            if self._energies_1st is None or self._psi_1st is None:
-                self.first_order_perturbation()
-
-            energies = self._energies_1st
-            states = self._psi_1st
-            # Already sorted?
-            if self._sort_idx_1st is not None and self._energies_1st_sorted is not None and self._psi_1st_sorted is not None:
-                # If we want to RE-USE the existing sort index/cached data:
-                # Just return those if the user calls again.
-                # Alternatively, we might forcibly re-sort, depending on your design.
-                if operator is not None:
-                    # reorder the operator rows & columns using the stored index
-                    op_sorted = operator[self._sort_idx_1st, :][:, self._sort_idx_1st]
-                    return self._energies_1st_sorted, self._psi_1st_sorted, op_sorted
-                else:
-                    return self._energies_1st_sorted, self._psi_1st_sorted
-            # Otherwise, we fall through to "sort now"
-
+            # Check if already sorted
+            if self._sort_idx_1st is not None and self._energies_1st_sorted is not None:
+                E_sorted = self._energies_1st_sorted
+                psi_sorted = self._psi_1st_sorted
+                sort_idx = self._sort_idx_1st
+            else:
+                sort_idx, E_sorted, psi_sorted = self.generate_1st_sorting()
         else:  # order == "2nd"
-            if self._energies_2nd is None or self._psi_2nd is None:
-                self.second_order_perturbation()
-
-            energies = self._energies_2nd
-            states = self._psi_2nd
-            if self._sort_idx_2nd is not None and self._energies_2nd_sorted is not None and self._psi_2nd_sorted is not None:
-                if operator is not None:
-                    op_sorted = operator[self._sort_idx_2nd, :][:, self._sort_idx_2nd]
-                    return self._energies_2nd_sorted, self._psi_2nd_sorted, op_sorted
-                else:
-                    return self._energies_2nd_sorted, self._psi_2nd_sorted
-
-        # --------------------------------------------------
-        # Proceed to do ascending sort if we didn't return yet
-        # --------------------------------------------------
-        sort_idx = np.argsort(energies)
-        E_sorted = energies[sort_idx]
-        psi_sorted = states[:, sort_idx]
-
-        # Cache the results
-        if order == "1st":
-            self._sort_idx_1st = sort_idx
-            self._energies_1st_sorted = E_sorted
-            self._psi_1st_sorted = psi_sorted
-        else:
-            self._sort_idx_2nd = sort_idx
-            self._energies_2nd_sorted = E_sorted
-            self._psi_2nd_sorted = psi_sorted
+            # Check if already sorted
+            if self._sort_idx_2nd is not None and self._energies_2nd_sorted is not None:
+                E_sorted = self._energies_2nd_sorted
+                psi_sorted = self._psi_2nd_sorted
+                sort_idx = self._sort_idx_2nd
+            else:
+                sort_idx, E_sorted, psi_sorted = self.generate_2nd_sorting()
 
         if operator is not None:
             op_sorted = operator[sort_idx, :][:, sort_idx]
@@ -208,7 +207,7 @@ class Perturbation:
         else:
             return E_sorted, psi_sorted
 
-    def reorder_to_product_basis(self, order="2nd", operator=None):
+    def reorder_to_product_basis(self, operator=None, order="2nd"):
         """
         Undo the ascending-energy ordering. We use the cached _sort_idx to invert the reordering.
 
@@ -221,40 +220,28 @@ class Perturbation:
             (E_unsorted, psi_unsorted)
         """
         if order == "1st":
-            if self._sort_idx_1st is None or self._energies_1st_sorted is None:
-                raise ValueError("No first-order sorted data found. Call reorder_to_energy_basis('1st') first.")
-            sort_idx = self._sort_idx_1st
-            E_sorted = self._energies_1st_sorted
-            psi_sorted = self._psi_1st_sorted
+            if self._sort_idx_1st is not None and self._energies_1st_sorted is not None:
+                sort_idx = self._sort_idx_1st
+                E_sorted = self._energies_1st_sorted
+                psi_sorted = self._psi_1st_sorted
+            else:
+                sort_idx, E_sorted, psi_sorted = self.generate_1st_sorting()
         else:
-            # "2nd" by default
-            if self._sort_idx_2nd is None or self._energies_2nd_sorted is None:
-                raise ValueError("No second-order sorted data found. Call reorder_to_energy_basis('2nd') first.")
-            sort_idx = self._sort_idx_2nd
-            E_sorted = self._energies_2nd_sorted
-            psi_sorted = self._psi_2nd_sorted
+            if self._sort_idx_2nd is not None and self._energies_2nd_sorted is not None:
+                sort_idx = self._sort_idx_2nd
+                E_sorted = self._energies_2nd_sorted
+                psi_sorted = self._psi_2nd_sorted
+            else:
+                sort_idx, E_sorted, psi_sorted = self.generate_2nd_sorting()
 
-        dim = self.dim
         # Invert the permutation
         inv_idx = np.empty_like(sort_idx)
-        inv_idx[sort_idx] = np.arange(dim)
-
-        # Build unsorted energies
-        E_unsorted = E_sorted[inv_idx]
-
-        # Reorder columns of psi_sorted back to original order
-        psi_unsorted = psi_sorted[:, inv_idx]
-
-        # Optionally store them back if you want to revert the official cached arrays
-        # or you can just return them without overwriting.
+        inv_idx[sort_idx] = np.arange(self.dim)
 
         if operator is not None:
-            # operator is in energy-basis ordering. We want to invert that labeling.
-            # So op_unsorted[i,j] = op[ inv_idx[i], inv_idx[j] ]
-            op_unsorted = operator[inv_idx, :][:, inv_idx]
-            return op_unsorted
+            return operator[inv_idx, :][:, inv_idx]
         else:
-            return E_unsorted, psi_unsorted
+            return E_sorted[inv_idx], psi_sorted[:, inv_idx]
 
 
     @staticmethod
