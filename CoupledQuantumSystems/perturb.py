@@ -15,7 +15,7 @@ class Perturbation:
     and provides methods to compute first- and second-order corrections.
     """
 
-    def __init__(self, dim: int, E0: np.ndarray, V: np.ndarray):
+    def __init__(self, dim: int, E0: np.ndarray, V: np.ndarray, ugly_fix_coefficient = 1):
         """
         Args:
             dim : dimension of the Hilbert space
@@ -40,6 +40,8 @@ class Perturbation:
         self._energies_2nd_sorted = None
         self._psi_2nd_sorted = None
         self._sort_idx_2nd = None
+
+        self.ugly_fix_coefficient = ugly_fix_coefficient
 
     @staticmethod
     def embed_operator(op: np.ndarray, dims_list: list[int], where_to_embed: int) -> np.ndarray:
@@ -67,7 +69,11 @@ class Perturbation:
         coeffs = self.V / denom
 
         # (D) Wavefunctions up to 1st order (unnormalized)
-        self._psi_1st = np.eye(self.dim, dtype=np.complex128) + coeffs
+        self._psi_1st = np.eye(self.dim, dtype=np.complex128) + coeffs / self.ugly_fix_coefficient
+
+        # Normalize the wavefunctions
+        norms = np.linalg.norm(self._psi_1st, axis=0)  # compute norms for all columns at once
+        self._psi_1st /= norms[np.newaxis, :]  # broadcast division across all rows
 
         return self._energies_1st, self._psi_1st
     
@@ -98,23 +104,24 @@ class Perturbation:
         # so column n is V * (psi_n^(1))
         #   => numerator[m,n] = ∑_p V[m,p]*psi1st[p,n] = ⟨m|V|psi_n^(1)⟩
         #
-        # Then denom2[m,n] = E0[n] - E0[m], same shape (dim, dim).
-        # => c2[m,n] = numerator[m,n] / denom2[m,n] for m != n.
+        # Then denom[m,n] = E0[n] - E0[m], same shape (dim, dim).
+        # => c2[m,n] = numerator[m,n] / denom[m,n] for m != n.
 
         numerator = self.V @ self._psi_1st  # shape (dim, dim)
-        denom2 = E0_row - E0_col
-        np.fill_diagonal(denom2, np.inf)
+        # denom = E0_row - E0_col
+        # np.fill_diagonal(denom, np.inf)
 
-        psi2 = numerator / denom2  # shape (dim, dim)
+        psi2 = numerator / denom  # shape (dim, dim)
         # For safety, zero out the diagonal so we never add infinite self-term
         np.fill_diagonal(psi2, 0.0)
 
         # (D) The total wavefunction up to second order
-        psi_up_to_2 = self._psi_1st + psi2
+        psi_up_to_2 = self._psi_1st + psi2 / self.ugly_fix_coefficient
 
-        for col in range(self.dim):
-            norm_col = np.linalg.norm(psi_up_to_2[:, col])
-            psi_up_to_2[:, col] /= norm_col
+        # Normalize the wavefunctions
+        norms = np.linalg.norm(psi_up_to_2, axis=0)  # compute norms for all columns at once
+        psi_up_to_2 /= norms[np.newaxis, :]  # broadcast division across all rows
+
         self._psi_2nd = psi_up_to_2 
 
         return self._energies_2nd, self._psi_2nd
@@ -257,7 +264,8 @@ class TwoBodyPerturbation(Perturbation):
                 energies_2: np.ndarray,  # shape (n,)
                 n_op_1: np.ndarray,      # shape (m,m)
                 n_op_2: np.ndarray,      # shape (n,n)
-                g: float
+                g: float,
+                ugly_fix_coefficient = 1
             ):
         m = len(energies_1)
         n = len(energies_2)
@@ -269,7 +277,7 @@ class TwoBodyPerturbation(Perturbation):
         E0 = E0_2D.ravel(order="C")  # shape (m*n,)
         # --- (B) Full perturbation matrix V = g * n_1 ⊗ n_2 ---
         V = g * np.kron(n_op_1, n_op_2)  # shape (dim, dim)
-        super().__init__(dim, E0, V)
+        super().__init__(dim, E0, V, ugly_fix_coefficient)
 
     def two_body_first_order_perturbation_vectorized(self) -> tuple[np.ndarray, np.ndarray]:
         return self.first_order_perturbation()
