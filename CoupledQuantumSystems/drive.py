@@ -89,7 +89,7 @@ class DriveTerm:
             ax.text(tlist[int(len(tlist)/3)], 2*np.pi* 0.99* self.pulse_shape_args['amp'],f"{self.pulse_id} freq: {self.pulse_shape_args['w_d']}")
 
 def square_pulse_with_rise_fall(t,
-                                args = {},math=np):
+                                args = {}, math=np):
     
     w_d = args['w_d']
     amp = args['amp']
@@ -110,14 +110,17 @@ def square_pulse_with_rise_fall(t,
     square_envelope = math.where(
         square_window,
         math.ones_like(t),
+        0.0
     )
     rise_envelope = math.where(
         rise_window,
         math.sin(math.pi * (t - t_start) / (2 * t_rise)) ** 2,
+        0.0
     )
     fall_envelope = math.where(
         fall_window,
         math.sin(math.pi * (t_end - t) / (2 * t_rise)) ** 2,
+        0.0
     )
     return (square_envelope + rise_envelope  + fall_envelope) * cos_modulation()
 
@@ -202,6 +205,7 @@ def gaussian_pulse(t, args={},math=np):
         envelope = math.where(
             inside_window,
             gaussian(t),
+            0.0
         )
     return envelope * cos_modulation() 
     
