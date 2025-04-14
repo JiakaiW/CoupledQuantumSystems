@@ -71,12 +71,12 @@ def generate_single_mapping(H_with_interaction_no_drive,evals = None, evecs = No
     Returns a dictionary like {(0,0,0):0,(0,0,1):1}
     Use this function instead of scqubit's because I can change the overlap threshold here
     """
+    failed = False
     if evals is None or evecs is None:
         evals, evecs = H_with_interaction_no_drive.eigenstates()
     overlap_matrix = scqubits.utils.spectrum_utils.convert_evecs_to_ndarray(evecs)
     OVERLAP_THRESHOLD = 0.1
     dims = H_with_interaction_no_drive.dims[0]
-    system_size = len(dims)
 
     product_state_names = list(itertools.product(*[range(dim) for dim in dims]))
 
@@ -91,10 +91,11 @@ def generate_single_mapping(H_with_interaction_no_drive,evals = None, evecs = No
         dressed_indices_of_product_states[int(max_position)] = dressed_index
         if (max_overlap**2 < OVERLAP_THRESHOLD):
             print(f'max overlap^2 {max_overlap**2} below threshold for dressed state {dressed_index} with eval {evals[dressed_index]}')
+            failed = True
     product_to_dressed = {}
     for product, dressed in zip(product_state_names,dressed_indices_of_product_states):
         product_to_dressed[product] = dressed
-    return product_to_dressed
+    return product_to_dressed, failed
 
 
 def dressed_to_2_level_dm(dressed_dm: qutip.Qobj, 
