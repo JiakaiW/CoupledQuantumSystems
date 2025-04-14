@@ -164,7 +164,7 @@ class QuantumSystem:
             return results[0]
         else:
             return results
-   
+
 class CoupledSystem(QuantumSystem):
     '''
     A parent class for quantum systems involving qubits and oscillators,
@@ -335,7 +335,6 @@ class CoupledSystem(QuantumSystem):
                                                    show_multithread_progress=show_multithread_progress,
                                                    store_states=store_states)
 
-
 class QubitResonatorSystem(CoupledSystem):
     def set_new_operators_after_setting_new_product_to_keep(self):
         self.a_trunc = self.truncate_function(self.a)
@@ -362,7 +361,7 @@ class QubitResonatorSystem(CoupledSystem):
         ladder_overlap = (numerator/denominator_1d)**2
         ladder_overlap = np.abs(ladder_overlap)
         return ladder_overlap
-    
+
 class FluxoniumOscillatorSystem(QubitResonatorSystem):
     def __init__(self,
                  computaional_states: str = '1,2',
@@ -414,7 +413,6 @@ class FluxoniumOscillatorSystem(QubitResonatorSystem):
         self.kappa = kappa
         self.set_new_operators_after_setting_new_product_to_keep()
 
-
 class TransmonOscillatorSystem(QubitResonatorSystem):
     def __init__(self,
                 qbt: scqubits.Transmon = None,
@@ -465,8 +463,7 @@ class TransmonOscillatorSystem(QubitResonatorSystem):
                 self.product_to_dressed[(ql,ol)] =  overlap_idx_arr[ql,ol] 
 
         return self.product_to_dressed
-    
-    
+
 class FluxoniumTransmonSystem(CoupledSystem):
     '''
     To model leakage detection of 12 fluxonium
