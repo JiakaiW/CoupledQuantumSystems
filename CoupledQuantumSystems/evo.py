@@ -39,7 +39,8 @@ def ODEsolve_and_post_process(
             post_processing_args:List=[],
 
             print_progress:bool = True,
-            file_name: str = None
+            file_name: str = None,
+            mcsolve_ntraj:int = 500,
             ):
     '''
     This method is only used for qutip's cpu solvers. For dynamiqs solver call CoupledSystem.run_dq_mesolve_parrallel

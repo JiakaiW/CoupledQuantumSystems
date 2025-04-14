@@ -8,8 +8,16 @@
 from dataclasses import dataclass, field
 from typing import  Callable, Dict
 import numpy as np
+import jax.numpy as jnp
 import qutip
 
+class MathBackend:
+    def __init__(self, backend):
+        self.backend = backend
+
+    def __getattr__(self, name):
+        return getattr(self.backend, name)
+        
 @dataclass
 class DriveTerm:
     '''
@@ -27,7 +35,7 @@ class DriveTerm:
     def __post_init__(self):
         if self.pulse_id != None:
             assert len(self.pulse_id)>0, 'cannot use pulse_id with zero length'
-        self.pulse_shape_func_with_id = self.wrapper
+        self.pulse_shape_func_with_id = self.id_wrapper
         self.pulse_shape_args_with_id = self.modify_args_with_id(self.pulse_shape_args)
 
     def modify_args_with_id(self, pulse_shape_args: Dict[str, float]) -> Dict[str, float]:
@@ -36,18 +44,24 @@ class DriveTerm:
         else:
             return {f"{key}": value for key, value in pulse_shape_args.items()}
     
-    def wrapper(self, t, args={}):
+    def id_wrapper(self, t, args={},math=np):
         try:
             if self.pulse_id is not None:
                 # Remove the id from the args that contain id, and then call the original function
                 unmodified_args = {key[:-len(self.pulse_id)]: value for key, value in args.items() if key.endswith(self.pulse_id)}
-                return self.pulse_shape_func(t, unmodified_args)
+                return self.pulse_shape_func(t, unmodified_args,math=math)
             else:
-                return self.pulse_shape_func(t, args)
+                return self.pulse_shape_func(t, args,math=math)
         except KeyError as e:
             raise KeyError(f"Missing argument key for pulse_id {self.pulse_id}: {e}")
         except Exception as e:
             raise ValueError(f"Error processing pulse function for pulse_id {self.pulse_id}: {e}")
+
+    def jax_wrapper(self) -> Callable:
+        """Returns a function compatible with JAX (math=jnp)."""
+        def jax_pulse_shape_func(t, args):
+            return self.pulse_shape_func_with_id(t, args, math=jnp)
+        return jax_pulse_shape_func
 
     def get_driven_op(self) -> qutip.Qobj:
         return self.driven_op
@@ -67,14 +81,15 @@ class DriveTerm:
         else:
             self.pulse_shape_args_with_id[f"{key}"] = value
     
-    def visualize(self,ax,tlist,args,alpha=1,color=None):
+    def visualize(self,ax,tlist,args,alpha=1,color=None,text = False):
         if color is None:
             color = 'blue'
         ax.plot(tlist, self.pulse_shape_func_with_id(tlist,args),label = self.pulse_id,alpha=alpha,color = color)
-        ax.text(tlist[int(len(tlist)/3)], 2*np.pi* 0.99* self.pulse_shape_args['amp'],f"{self.pulse_id} freq: {self.pulse_shape_args['w_d']}")
+        if text:
+            ax.text(tlist[int(len(tlist)/3)], 2*np.pi* 0.99* self.pulse_shape_args['amp'],f"{self.pulse_id} freq: {self.pulse_shape_args['w_d']}")
 
 def square_pulse_with_rise_fall(t,
-                                args = {}):
+                                args = {},math=np):
     
     w_d = args['w_d']
     amp = args['amp']
@@ -83,23 +98,31 @@ def square_pulse_with_rise_fall(t,
     t_square = args.get('t_square', 0)  # Duration of constant amplitude
 
     def cos_modulation():
-        return 2 * np.pi * amp * np.cos(w_d * 2 * np.pi * t)
+        return 2 * math.pi * amp * math.cos(w_d * 2 * math.pi * t)
     
     t_fall_start = t_start + t_rise + t_square  # Start of fall
     t_end = t_fall_start + t_rise  # End of the pulse
     
-    if t < t_start:
-        return 0
-    elif t_start <= t <= t_start + t_rise:
-        return np.sin(np.pi * (t - t_start) / (2 * t_rise)) ** 2 * cos_modulation()
-    elif t_start + t_rise < t <= t_fall_start:
-        return cos_modulation()
-    elif t_fall_start < t <= t_end:
-        return np.sin(np.pi * (t_end - t) / (2 * t_rise)) ** 2 * cos_modulation()
-    else:
-        return 0
+    rise_window = (t >= t_start) & (t <= t_start + t_rise)
+    square_window = (t >= t_start + t_rise) & (t <= t_fall_start)
+    fall_window = (t >= t_fall_start) & (t <= t_end)
 
-def sin_squared_pulse_with_modulation(t, args={}):
+    square_envelope = math.where(
+        square_window,
+        math.ones_like(t),
+    )
+    rise_envelope = math.where(
+        rise_window,
+        math.sin(math.pi * (t - t_start) / (2 * t_rise)) ** 2,
+    )
+    fall_envelope = math.where(
+        fall_window,
+        math.sin(math.pi * (t_end - t) / (2 * t_rise)) ** 2,
+    )
+    return (square_envelope + rise_envelope  + fall_envelope) * cos_modulation()
+
+
+def sin_squared_pulse_with_modulation(t, args={},math=np):
     w_d = args['w_d']
     amp = args['amp']
     t_duration = args.get('t_duration')
@@ -107,20 +130,21 @@ def sin_squared_pulse_with_modulation(t, args={}):
     phi = args.get('phi', 0)
 
     def cos_modulation():
-        return 2 * np.pi * np.cos(w_d * 2 * np.pi * t - phi)
+        return 2 * math.pi * math.cos(w_d * 2 * math.pi * t - phi)
     
     t_end = t_start + t_duration  # End of the pulse
     
-    if t < t_start:
-        return 0
-    elif t_start <= t <= t_end:
-        envelope = np.sin(np.pi * (t - t_start) / t_duration) ** 2
-        return amp * envelope * cos_modulation()
-    else:
-        return 0
+    inside_window = (t >= t_start) & (t <= t_end)
+    envelope = math.where(
+        inside_window,
+        math.sin(math.pi * (t - t_start) / t_duration) ** 2,
+        0.0
+    )
+    return amp * envelope * cos_modulation()
 
 
-def sin_squared_DRAG_with_modulation(t, args={}):
+
+def sin_squared_DRAG_with_modulation(t, args={},math=np):
     w_d = args['w_d']
     amp = args['amp']
     amp_correction = args['amp_correction']
@@ -129,21 +153,26 @@ def sin_squared_DRAG_with_modulation(t, args={}):
     phi = args.get('phi', 0)
 
     def cos_modulation():
-        return 2 * np.pi * np.cos(w_d * 2 * np.pi * t - phi)
+        return 2 * math.pi * math.cos(w_d * 2 * math.pi * t - phi)
     
     t_end = t_start + t_duration  # End of the pulse
     
-    if t < t_start:
-        return 0
-    elif t_start <= t <= t_end:
-        envelope = np.sin(np.pi * (t - t_start) / t_duration) ** 2
-        envelope_derivative = np.sin(2 * np.pi * (t - t_start) / t_duration)
-        return ( amp * envelope + 1j* amp_correction * envelope_derivative ) * cos_modulation() 
-    else:
-        return 0
+    inside_window = (t >= t_start) & (t <= t_end)
+    envelope = math.where(
+        inside_window,
+        math.sin(math.pi * (t - t_start) / t_duration) ** 2,
+        0.0
+    )
+    envelope_derivative = math.where(
+        inside_window,
+        math.sin(2 * math.pi * (t - t_start) / t_duration),
+        0.0
+    )
+    return ( amp * envelope + 1j* amp_correction * envelope_derivative ) * cos_modulation() 
 
 
-def gaussian_pulse(t, args={}):
+
+def gaussian_pulse(t, args={},math=np):
     w_d = args['w_d']
     amp = args['amp']
     t_duration = args['t_duration']
@@ -155,22 +184,29 @@ def gaussian_pulse(t, args={}):
     t_center = t_start + t_duration / 2  # Center of the Gaussian pulse
 
     def gaussian(t):
-        return amp * np.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
+        return amp * math.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
     def cos_modulation():
-        return 2 * np.pi * np.cos(w_d * 2 * np.pi * t - phi)
+        return 2 * math.pi * math.cos(w_d * 2 * math.pi * t - phi)
     t_end = t_start + t_duration  # End of the pulse
 
-    if t < t_start or t > t_end:
-        return 0
+    inside_window = (t >= t_start) & (t <= t_end)
+    if normalize:
+        envelope = math.where(
+            inside_window,
+            gaussian(t),
+            0.0
+        )
+        a = gaussian(t_start)
+        envelope = (envelope - a) / (1 - a)
     else:
-        pulse_value = gaussian(t)
-        if normalize:
-            a = gaussian(t_start)
-            pulse_value = (pulse_value - a) / (1 - a)
-        return pulse_value* cos_modulation() 
+        envelope = math.where(
+            inside_window,
+            gaussian(t),
+        )
+    return envelope * cos_modulation() 
     
 
-def gaussian_DRAG_pulse(t, args={}):
+def gaussian_DRAG_pulse(t, args={},math=np):
     w_d = args['w_d']
     amp = args['amp']
     amp_correction_scaling_factor = args['amp_correction_scaling_factor']
@@ -183,22 +219,23 @@ def gaussian_DRAG_pulse(t, args={}):
     t_center = t_start + t_duration / 2  # Center of the Gaussian pulse
 
     def gaussian(t):
-        return amp * np.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
+        return amp * math.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
     def cos_modulation():
-        return 2 * np.pi * np.cos(w_d * 2 * np.pi * t - phi)
+        return 2 * math.pi * math.cos(w_d * 2 * math.pi * t - phi)
     t_end = t_start + t_duration  # End of the pulse
 
-    if t < t_start or t > t_end:
-        return 0
-    else:
-        pulse_value = gaussian(t)
-        if normalize:
-            a = gaussian(t_start)
-            pulse_value = (pulse_value - a) / (1 - a)
-        return (1+1j*amp_correction_scaling_factor*(-(t - t_center)/sigma**2))*pulse_value* cos_modulation() 
+    inside_window = (t >= t_start) & (t <= t_end)
+    envelope = math.where(
+        inside_window,
+        gaussian(t),
+        0.0
+    )
+    if normalize:
+        a = gaussian(t_start)
+        envelope = (envelope - a) / (1 - a)
+    return (1+1j*amp_correction_scaling_factor*(-(t - t_center)/sigma**2))*envelope* cos_modulation() 
     
-
-def STIRAP_with_modulation(t,args = {}):
+def STIRAP_with_modulation(t,args = {},math=np):
     # Symmetric Rydberg controlled-𝑍 gates with adiabatic pulses M. Saffman, I. I. Beterov, A. Dalal, E. J. Páez, and B. C. Sanders Phys. Rev. A 101, 062309 – Published 3 June 2020
     # Optimum pulse shapes for stimulated Raman adiabatic passage Phys. Rev. A 80, 013417 G. S. Vasilev, A. Kuhn, and N. V. Vitanov 2009
     w_d = args['w_d']
@@ -209,20 +246,20 @@ def STIRAP_with_modulation(t,args = {}):
     phi = args.get('phi', 0)
 
     def cos_modulation():
-        return 2 * np.pi * amp * np.cos(w_d * 2 * np.pi * t - phi)
+        return 2 * math.pi * amp * math.cos(w_d * 2 * math.pi * t - phi)
     
     lambda_val = 4
     tau_for_mono = (t_stop-t_start) / 6
     center = (t_stop-t_start) / 2 + t_start
 
     def mono_increasing_f(t):
-        return 1 / (1 + np.exp(-lambda_val * (t-center) / tau_for_mono))
+        return 1 / (1 + math.exp(-lambda_val * (t-center) / tau_for_mono))
     
     def hyper_Gaussian_F(t):
         T0 = 2 * tau_for_mono
-        return np.exp(  - ((t-center) / T0) ** (2*3) )
+        return math.exp(  - ((t-center) / T0) ** (2*3) )
     a = hyper_Gaussian_F(t_start)
     if stoke:
-        return (hyper_Gaussian_F(t)- a)/(1-a)* np.cos(np.pi/2 * mono_increasing_f(t)) * cos_modulation()
+        return (hyper_Gaussian_F(t)- a)/(1-a)* math.cos(math.pi/2 * mono_increasing_f(t)) * cos_modulation()
     else:
-        return (hyper_Gaussian_F(t)- a)/(1-a) * np.sin(np.pi/2 * mono_increasing_f(t)) * cos_modulation()
+        return (hyper_Gaussian_F(t)- a)/(1-a) * math.sin(math.pi/2 * mono_increasing_f(t)) * cos_modulation()
