@@ -555,7 +555,7 @@ class TransmonOscillatorSystem(QubitResonatorSystem):
         resonator_creation_arr = id_wrapped_resonator_destory.dag().full()
         ladder_overlap = self.get_ladder_overlap_arr(resonator_creation_arr)
         overlap_idx_arr = np.zeros((self.qbt.truncated_dim,self.osc.truncated_dim),dtype=int)
-        for ql in tqdm(range(self.qbt.truncated_dim), desc = "ql loop"):
+        for ql in tqdm(range(self.qbt.truncated_dim), desc = "Using Blais approach to relable dressed states, ql loop:"):
             for ol in range(self.osc.truncated_dim):    
                 if ql == 0 and ol == 0:
                     overlap_idx_arr[ql,ol] = 0
