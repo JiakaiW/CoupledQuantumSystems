@@ -1,6 +1,11 @@
 # CoupledQuantumSystems
 
-![Meme](assets/gpu_meme.jpg)
+![gpu_meme](assets/gpu_meme.jpg)
+
+Quality of life improvements for quantum simulations,
+- [ ] GPU simulation chekcpointing
+- [ ] Product basis - dressed basis assignment and fast conversion
+- [ ] a lot more
  
 ```
 pip3 install git+https://github.com/JiakaiW/CoupledQuantumSystems
