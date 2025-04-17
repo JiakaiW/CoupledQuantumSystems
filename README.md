@@ -1,7 +1,7 @@
 # CoupledQuantumSystems
 
 ![Meme](assets/gpu_meme.jpg)
-
+ 
 ```
 pip3 install git+https://github.com/JiakaiW/CoupledQuantumSystems
 ```
