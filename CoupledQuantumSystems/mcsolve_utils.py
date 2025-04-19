@@ -10,7 +10,6 @@ import gzip
 from CoupledQuantumSystems.drive import DriveTerm
 from CoupledQuantumSystems.mcsolve_on_node import packed_mcsolve_problem
 
-
 def pack_mcsolve_chunks(
                     y0: qutip.Qobj,
                     tlist: np.array,
@@ -47,7 +46,6 @@ def pack_mcsolve_chunks(
     existing_chunk_num = chunk_id
     return existing_chunk_num
 
-
 def pack_pkl_files_to_zip(zip_filename="mcsolve_input.zip"):
     with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for filename in os.listdir('.'):
@@ -55,7 +53,6 @@ def pack_pkl_files_to_zip(zip_filename="mcsolve_input.zip"):
             if ext == '.pkl' and name.isdigit():
                 zipf.write(filename)
                 os.remove(filename)
-
 
 def merge_results(zip_files):
     # Used to merge mcsolve results on HTC condor

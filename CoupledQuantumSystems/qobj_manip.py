@@ -6,17 +6,6 @@ import scqubits
 import qutip
 from typing import Union
 
-
-############################################################################
-#
-#
-# Functions about manipulating qutip/scqubit objects
-#
-#
-############################################################################
-
-
-
 def truncate_custom(qobj: qutip.Qobj, products_to_keep: list, product_to_dressed: dict) -> qutip.Qobj:
     products_to_keep_tuples = [tuple(product) for product in products_to_keep]
     
@@ -63,7 +52,6 @@ def pad_back_custom(qobj: qutip.Qobj, products_to_keep: Union[list,None], produc
         padded_matrix[np.ix_(indices_to_keep, indices_to_keep)] = qobj.full()
         return qutip.Qobj(padded_matrix)
 
-
 def generate_single_mapping(H_with_interaction_no_drive,evals = None, evecs = None) -> np.ndarray:
     """
     The input should be in product basis
@@ -96,7 +84,6 @@ def generate_single_mapping(H_with_interaction_no_drive,evals = None, evecs = No
     for product, dressed in zip(product_state_names,dressed_indices_of_product_states):
         product_to_dressed[product] = dressed
     return product_to_dressed, failed
-
 
 def dressed_to_2_level_dm(dressed_dm: qutip.Qobj, 
                         product_to_dressed: dict, 
@@ -141,7 +128,6 @@ def dressed_to_2_level_dm(dressed_dm: qutip.Qobj,
     rho_2_level = rho_product.ptrace(qbt_position)
     return rho_2_level
 
-
 def find_dominant_frequency(expectation,tlist,dominant_frequency_already_found = None,plot = False,plot_freq = False):
     # In case alpha oscillates not at drive frequency, we do fourier transform to make the plot of coherent state look better 
 
@@ -174,10 +160,8 @@ def find_dominant_frequency(expectation,tlist,dominant_frequency_already_found =
     else:
         return dominant_freq
 
-
 def transition_frequency(hilbertspace,s0: int, s1: int) -> float:
     return (hilbertspace.energy_by_dressed_index(s1)- hilbertspace.energy_by_dressed_index(s0))
-
 
 # Deprecated
 def get_product(dressed_dm,pad_back_custom,product_to_dressed,sign_multiplier):

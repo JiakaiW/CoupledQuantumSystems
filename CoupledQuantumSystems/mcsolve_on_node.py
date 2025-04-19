@@ -7,7 +7,6 @@ from typing import List,Union
 
 from CoupledQuantumSystems.drive import DriveTerm
 
-
 @dataclass
 class packed_mcsolve_problem:
     y0: qutip.Qobj

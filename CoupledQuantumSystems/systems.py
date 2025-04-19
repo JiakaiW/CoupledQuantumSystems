@@ -439,7 +439,6 @@ class CoupledSystem(QuantumSystem):
                                                    show_multithread_progress=show_multithread_progress,
                                                    store_states=store_states)
 
-
 class QubitResonatorSystem(CoupledSystem):
     def set_new_operators_after_setting_new_product_to_keep(self):
         self.a_trunc = self.truncate_function(self.a)
@@ -518,7 +517,6 @@ class FluxoniumOscillatorSystem(QubitResonatorSystem):
         self.kappa = kappa
         self.set_new_operators_after_setting_new_product_to_keep()
 
-
 class TransmonOscillatorSystem(QubitResonatorSystem):
     def __init__(self,
                 qbt: scqubits.Transmon = None,
@@ -570,7 +568,6 @@ class TransmonOscillatorSystem(QubitResonatorSystem):
 
         return self.product_to_dressed
     
-    
 class FluxoniumTransmonSystem(CoupledSystem):
     '''
     To model leakage detection of 12 fluxonium
@@ -598,166 +595,163 @@ class FluxoniumTransmonSystem(CoupledSystem):
                          qbt_position=0,
                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
 
-# class FFTSystem(CoupledSystem):
-#     '''
-#     To model leakage detection of 12 fluxonium
-#     '''
+class FFTSystem(CoupledSystem):
+    '''
+    !!!!!!!!!!!!! NOT FINISHED !!!!!!!!!!!!!
+    '''
 
-#     def __init__(self,
-#                  fluxonium1: scqubits.Fluxonium,
-#                  fluxonium2: scqubits.Fluxonium,
-#                  transmon: scqubits.Transmon,
-#                  computaional_states: str,  # = '0,1' or '1,2'
+    def __init__(self,
+                 fluxonium1: scqubits.Fluxonium,
+                 fluxonium2: scqubits.Fluxonium,
+                 transmon: scqubits.Transmon,
+                 computaional_states: str,  # = '0,1' or '1,2'
 
-#                  g_f1f2: float = 0.1,
-#                  g_f1t: float = 0.1,
-#                  g_f2t:float=0.1,
-#                  products_to_keep: List[List[int]] = None,
-#                  ):
+                 g_f1f2: float = 0.1,
+                 g_f1t: float = 0.1,
+                 g_f2t:float=0.1,
+                 products_to_keep: List[List[int]] = None,
+                 ):
 
-#         self.fluxonium1 = fluxonium1
-#         self.fluxonium2 = fluxonium2
-#         self.transmon = transmon
-#         hilbertspace = scqubits.HilbertSpace(
-#             [self.fluxonium1, self.fluxonium2, self.transmon])
-#         hilbertspace.add_interaction(
-#             g_strength=g_f1f2, op1=self.fluxonium1.n_operator, op2=self.fluxonium2.n_operator, add_hc=False)
-#         hilbertspace.add_interaction(
-#             g_strength=g_f1t, op1=self.fluxonium1.n_operator, op2=self.transmon.n_operator, add_hc=False)
-#         hilbertspace.add_interaction(
-#             g_strength=g_f2t, op1=self.fluxonium2.n_operator, op2=self.transmon.n_operator, add_hc=False)
+        self.fluxonium1 = fluxonium1
+        self.fluxonium2 = fluxonium2
+        self.transmon = transmon
+        hilbertspace = scqubits.HilbertSpace(
+            [self.fluxonium1, self.fluxonium2, self.transmon])
+        hilbertspace.add_interaction(
+            g_strength=g_f1f2, op1=self.fluxonium1.n_operator, op2=self.fluxonium2.n_operator, add_hc=False)
+        hilbertspace.add_interaction(
+            g_strength=g_f1t, op1=self.fluxonium1.n_operator, op2=self.transmon.n_operator, add_hc=False)
+        hilbertspace.add_interaction(
+            g_strength=g_f2t, op1=self.fluxonium2.n_operator, op2=self.transmon.n_operator, add_hc=False)
 
-#         super().__init__(hilbertspace=hilbertspace,
-#                          products_to_keep=products_to_keep,
-#                          qbt_position=0,# let's use an arbitrary choice of qbt_position here.
-#                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])],# computaional_states here is also arbitraray, since it's only used to generate filtered_product_to_dressed to take out the computational subspace of the qubit in post-processing.
-#                          )
+        super().__init__(hilbertspace=hilbertspace,
+                         products_to_keep=products_to_keep,
+                         qbt_position=0,# let's use an arbitrary choice of qbt_position here.
+                         computaional_states=[int(computaional_states[0]), int(computaional_states[-1])],# computaional_states here is also arbitraray, since it's only used to generate filtered_product_to_dressed to take out the computational subspace of the qubit in post-processing.
+                         )
     
-#     def get_SATD_CZ_drive_terms(self,
-#                                ):
-#         def P(x):
-#             return 6*(2*x)**5-15*(2*x)**4+10*(2*x)**3
-#         def theta(t,tg):
-#             t_over_tg = t/tg
-#             if t_over_tg <= 1/2:
-#                 return np.pi/2*P(t_over_tg)
-#             else:
-#                 return np.pi/2*(1-P(t_over_tg - 1/2))
-#         def theta_t_gradient(t,tg):
-#             t_over_tg = t/tg
-#             # Derivative of P(x)
-#             def dP(x):
-#                 return (960*x**4 - 960*x**3 + 240*x**2)/tg
+    def get_SATD_CZ_drive_terms(self,
+                               ):
+        def P(x):
+            return 6*(2*x)**5-15*(2*x)**4+10*(2*x)**3
+        def theta(t,tg):
+            t_over_tg = t/tg
+            if t_over_tg <= 1/2:
+                return np.pi/2*P(t_over_tg)
+            else:
+                return np.pi/2*(1-P(t_over_tg - 1/2))
+        def theta_t_gradient(t,tg):
+            t_over_tg = t/tg
+            # Derivative of P(x)
+            def dP(x):
+                return (960*x**4 - 960*x**3 + 240*x**2)/tg
 
-#             if t_over_tg <= 0.5:
-#                 return (np.pi/2) * dP(t_over_tg)
-#             else:
-#                 return (np.pi/2) * (-dP(t_over_tg - 0.5))
-#         def theta_t_curvature(t,tg):
-#             t_over_tg = t/tg
-#             # Second derivative of P(x)
-#             def ddP(x):
-#                 return (3840*x**3 - 2880*x**2 + 480*x)/tg**2
+            if t_over_tg <= 0.5:
+                return (np.pi/2) * dP(t_over_tg)
+            else:
+                return (np.pi/2) * (-dP(t_over_tg - 0.5))
+        def theta_t_curvature(t,tg):
+            t_over_tg = t/tg
+            # Second derivative of P(x)
+            def ddP(x):
+                return (3840*x**3 - 2880*x**2 + 480*x)/tg**2
 
-#             if t_over_tg <= 0.5:
-#                 return (np.pi/2) * ddP(t_over_tg)
-#             else:
-#                 return (np.pi/2) * (-ddP(t_over_tg - 0.5))
+            if t_over_tg <= 0.5:
+                return (np.pi/2) * ddP(t_over_tg)
+            else:
+                return (np.pi/2) * (-ddP(t_over_tg - 0.5))
 
-#         def gamma(gamma_0,t_over_tg):
-#             if t_over_tg <= 1/2:
-#                 return 0
-#             else:
-#                 return gamma_0
-#         def Omega_A(t,tg,Omega_0):
-#             return Omega_0*np.sin(theta(t/tg))
-#         def Omega_B(t,tg,Omega_0,gamma_0):
-#             return Omega_0*np.cos(theta(t/tg))*np.exp(1j*gamma(gamma_0,t/tg))
-#         def Omega_A_tilde(t,tg,Omega_0):
-#             return Omega_0*()
-#         def Omega_B_tilde(t,tg,Omega_0,gamma_0):
-#             return Omega_0*np.sin(theta(t/tg))*np.exp(1j*gamma(gamma_0,t/tg))
-#         def SATD_coupler_modulation(t,args):
-#             pass
-#         drive_terms = [
-#             DriveTerm(
-#                 driven_op=qutip.Qobj(
-#                     self.transmon.cos_phi_operator(energy_esys=True)),
-#                 pulse_shape_func=SATD_coupler_modulation,
-#                 pulse_id='SATD',  # Stoke is the first pulse, pump is the second
-#                 pulse_shape_args={
-#                     'w_d': None,
+        def gamma(gamma_0,t_over_tg):
+            if t_over_tg <= 1/2:
+                return 0
+            else:
+                return gamma_0
+        def Omega_A(t,tg,Omega_0):
+            return Omega_0*np.sin(theta(t/tg))
+        def Omega_B(t,tg,Omega_0,gamma_0):
+            return Omega_0*np.cos(theta(t/tg))*np.exp(1j*gamma(gamma_0,t/tg))
+        def Omega_A_tilde(t,tg,Omega_0):
+            return Omega_0*()
+        def Omega_B_tilde(t,tg,Omega_0,gamma_0):
+            return Omega_0*np.sin(theta(t/tg))*np.exp(1j*gamma(gamma_0,t/tg))
+        def SATD_coupler_modulation(t,args):
+            pass
+        drive_terms = [
+            DriveTerm(
+                driven_op=qutip.Qobj(
+                    self.transmon.cos_phi_operator(energy_esys=True)),
+                pulse_shape_func=SATD_coupler_modulation,
+                pulse_id='SATD',  # Stoke is the first pulse, pump is the second
+                pulse_shape_args={
+                    'w_d': None,
                     
-#                 },
-#             ),
+                },
+            ),
             
-#         ]
-#         return drive_terms
+        ]
+        return drive_terms
+
+class FluxoniumOscillatorFilterSystem(CoupledSystem):
+    '''
+    !!!!!!!!!!!!! NOT FINISHED !!!!!!!!!!!!!
+    '''
+
+    def __init__(self,
+                 computaional_states: str,  # = '0,1' or '1,2'
+
+                 EJ: float = 2.33,
+                 EC: float = 0.69,
+                 EL: float = 0.12,
+                 qubit_level: float = 13,
 
 
-# class FluxoniumOscillatorFilterSystem(CoupledSystem):
-#     '''
-#     To model leakage detection of 12 fluxonium with purcell filter
+                 Er: float = 7.16518677,
+                 osc_level: float = 20,
 
-#     !!!!!!!!!!!!! NOT FINISHED !!!!!!!!!!!!!
-#     '''
+                 Ef: float = 7.13,
+                 filter_level: float = 7,
+                 # Ef *2pi = omega_f,  kappa_f = omega_f / Q , kappa_f^{-1} = 0.67 ns
+                 kappa_f=1.5,
 
-#     def __init__(self,
-#                  computaional_states: str,  # = '0,1' or '1,2'
+                 g_strength: float = 0.18,
+                 # G satisfies a relation with omega_r in equation 10 of Phys. Rev A 92. 012325 (2015)
+                 G_strength: float = 0.3,
 
-#                  EJ: float = 2.33,
-#                  EC: float = 0.69,
-#                  EL: float = 0.12,
-#                  qubit_level: float = 13,
+                 products_to_keep: List[List[int]] = None,
+                 w_d: float = None,
+                 ):
 
+        # Q_f = 30
+        # kappa_f = Ef * 2 * np.pi / Q_f
+        # kappa_r = 0.0001 #we want a really small effective readout resonator decay rate to reduce purcell decay
+        # G_strength =np.sqrt(kappa_f * kappa_r * ( 1 + (2*(Er-Ef)*2*np.pi/kappa_f )**2 ) /4)
 
-#                  Er: float = 7.16518677,
-#                  osc_level: float = 20,
+        self.G_strength = G_strength
 
-#                  Ef: float = 7.13,
-#                  filter_level: float = 7,
-#                  # Ef *2pi = omega_f,  kappa_f = omega_f / Q , kappa_f^{-1} = 0.67 ns
-#                  kappa_f=1.5,
+        self.qbt = scqubits.Fluxonium(
+            EJ=EJ, EC=EC, EL=EL, flux=0, cutoff=110, truncated_dim=qubit_level)
+        self.osc = scqubits.Oscillator(E_osc=Er, truncated_dim=osc_level)
+        self.filter = scqubits.Oscillator(E_osc=Ef, truncated_dim=filter_level)
+        hilbertspace = scqubits.HilbertSpace([self.qbt, self.osc, self.filter])
+        hilbertspace.add_interaction(
+            g_strength=g_strength, op1=self.qbt.n_operator, op2=self.osc.creation_operator, add_hc=True)
+        hilbertspace.add_interaction(g_strength=G_strength, op1=self.osc.creation_operator,
+                                     op2=self.filter.annihilation_operator, add_hc=True)
 
-#                  g_strength: float = 0.18,
-#                  # G satisfies a relation with omega_r in equation 10 of Phys. Rev A 92. 012325 (2015)
-#                  G_strength: float = 0.3,
+        super().__init__(hilbertspace=hilbertspace,
+                         products_to_keep=products_to_keep,
+                         qbt_position=0,
+                         computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
 
-#                  products_to_keep: List[List[int]] = None,
-#                  w_d: float = None,
-#                  ):
+        self.a = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
+            self.osc.annihilation_operator)[:, :])
+        self.a_trunc = self.truncate_function(self.a)
 
-#         # Q_f = 30
-#         # kappa_f = Ef * 2 * np.pi / Q_f
-#         # kappa_r = 0.0001 #we want a really small effective readout resonator decay rate to reduce purcell decay
-#         # G_strength =np.sqrt(kappa_f * kappa_r * ( 1 + (2*(Er-Ef)*2*np.pi/kappa_f )**2 ) /4)
+        self.b = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
+            self.filter.annihilation_operator)[:, :])
+        self.b_trunc = self.truncate_function(self.b)
+        self.driven_operator = self.b_trunc+self.b_trunc.dag()
+        self.c_ops = [np.sqrt(kappa_f) * self.b_trunc]
 
-#         self.G_strength = G_strength
-
-#         self.qbt = scqubits.Fluxonium(
-#             EJ=EJ, EC=EC, EL=EL, flux=0, cutoff=110, truncated_dim=qubit_level)
-#         self.osc = scqubits.Oscillator(E_osc=Er, truncated_dim=osc_level)
-#         self.filter = scqubits.Oscillator(E_osc=Ef, truncated_dim=filter_level)
-#         hilbertspace = scqubits.HilbertSpace([self.qbt, self.osc, self.filter])
-#         hilbertspace.add_interaction(
-#             g_strength=g_strength, op1=self.qbt.n_operator, op2=self.osc.creation_operator, add_hc=True)
-#         hilbertspace.add_interaction(g_strength=G_strength, op1=self.osc.creation_operator,
-#                                      op2=self.filter.annihilation_operator, add_hc=True)
-
-#         super().__init__(hilbertspace=hilbertspace,
-#                          products_to_keep=products_to_keep,
-#                          qbt_position=0,
-#                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
-
-#         self.a = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
-#             self.osc.annihilation_operator)[:, :])
-#         self.a_trunc = self.truncate_function(self.a)
-
-#         self.b = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
-#             self.filter.annihilation_operator)[:, :])
-#         self.b_trunc = self.truncate_function(self.b)
-#         self.driven_operator = self.b_trunc+self.b_trunc.dag()
-#         self.c_ops = [np.sqrt(kappa_f) * self.b_trunc]
-
-#         if w_d != None:
-#             self.w_d = w_d
+        if w_d != None:
+            self.w_d = w_d

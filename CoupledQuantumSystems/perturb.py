@@ -1,5 +1,4 @@
 import numpy as np
-from abc import ABC, abstractmethod
 
 class Perturbation:
     """
@@ -255,8 +254,6 @@ class Perturbation:
             return operator[inv_idx, :][:, inv_idx]
         else:
             return E_sorted[inv_idx], psi_sorted[:, inv_idx]
-
-
 
 class TwoBodyPerturbation(Perturbation):
     def __init__(self,         

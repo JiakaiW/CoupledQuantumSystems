@@ -11,19 +11,6 @@ from CoupledQuantumSystems.noise import *
 from CoupledQuantumSystems.qobj_manip import *
 from CoupledQuantumSystems.systems import QuantumSystem
 
-
-'''
-The numerical study of single-qubit gates for gf-IFQ is composed of these tasks.
-
-Gates to be studied: X (STIRAP), Y (STIRAP with a pi/2 phase) and H (fSTIRAP),
-    Z gates will be done virtually. (https://arxiv.org/pdf/1612.00858)
-
-Gate simulation takes these inputs: hamiltonian, with decay/dephasing rates evaluated from numerical estimation of lifetime.
-    Decay from state $\ket{b}$ to $\ket{a}$ is $\sqrt{\Gamma_{\ket{b}\rightarrow \ket{a}}} \ket{a}\bra{b}$
-    Pure dephasing is $diag(\sqrt{\Gamma_i}, \sqrt{\Gamma_j}, \sqrt{\Gamma_k})$
-'''
-
-
 class gfIFQ(QuantumSystem):
     def __init__(self,
                  EJ,

@@ -124,7 +124,6 @@ def square_pulse_with_rise_fall(t,
     )
     return (square_envelope + rise_envelope  + fall_envelope) * cos_modulation()
 
-
 def sin_squared_pulse_with_modulation(t, args={},math=np):
     w_d = args['w_d']
     amp = args['amp']
@@ -144,8 +143,6 @@ def sin_squared_pulse_with_modulation(t, args={},math=np):
         0.0
     )
     return amp * envelope * cos_modulation()
-
-
 
 def sin_squared_DRAG_with_modulation(t, args={},math=np):
     w_d = args['w_d']
@@ -172,8 +169,6 @@ def sin_squared_DRAG_with_modulation(t, args={},math=np):
         0.0
     )
     return ( amp * envelope + 1j* amp_correction * envelope_derivative ) * cos_modulation() 
-
-
 
 def gaussian_pulse(t, args={},math=np):
     w_d = args['w_d']
@@ -208,7 +203,6 @@ def gaussian_pulse(t, args={},math=np):
             0.0
         )
     return envelope * cos_modulation() 
-    
 
 def gaussian_DRAG_pulse(t, args={},math=np):
     w_d = args['w_d']
@@ -238,7 +232,7 @@ def gaussian_DRAG_pulse(t, args={},math=np):
         a = gaussian(t_start)
         envelope = (envelope - a) / (1 - a)
     return (1+1j*amp_correction_scaling_factor*(-(t - t_center)/sigma**2))*envelope* cos_modulation() 
-    
+
 def STIRAP_with_modulation(t,args = {},math=np):
     # Symmetric Rydberg controlled-𝑍 gates with adiabatic pulses M. Saffman, I. I. Beterov, A. Dalal, E. J. Páez, and B. C. Sanders Phys. Rev. A 101, 062309 – Published 3 June 2020
     # Optimum pulse shapes for stimulated Raman adiabatic passage Phys. Rev. A 80, 013417 G. S. Vasilev, A. Kuhn, and N. V. Vitanov 2009

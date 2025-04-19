@@ -66,21 +66,3 @@ def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
             original_index = futures[future]
             results[original_index] = future.result()
     return results
-
-def run_dq_ODEsolve_and_post_process_jobs_with_different_systems_but_same_y0(
-        list_of_systems: List[CoupledSystem],
-        list_of_kwargs: list[Any],
-        max_workers = None,
-        store_states = True,
-        post_processing = ['pad_back'],
-    ):
-    '''
-    This function runs dynamiqs's mesolve or sesolve using the concurrency of dynamiqs, 
-       and then use cpu parrallization to do post processing.
-    Function signature is intentionally kept the same as run_parallel_ODEsolve_and_post_process_jobs_with_different_systems
-
-    Because we utilize dynamiqs' concurrency, we will run every hamiltonian with every initial states when calling dq.sesolve. 
-    And most importantly we will apply the jump_ops to every simulation! We don't have the same jump_ops with different systems.
-    '''
-    pass
-
