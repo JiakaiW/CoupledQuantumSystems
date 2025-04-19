@@ -13,26 +13,27 @@ class Checkpoint:
     '''
     Checkpoint data should be store as qutip data, instead of data in VRAM (dynamiqs.Result).
     '''
-    last_t_idx: int
+    next_t_idx: int
     qt_result: qutip.solver.Result
     
     def __init__(self):
-        self.last_t_idx = 0
+        self.next_t_idx = 0
         self.qt_result = qutip.solver.Result()
 
     def convert_from_dq_result(self, dq_result: dq.result.Result):
         self.qt_result.solver = 'dynamiqs'
-        self.qt_result.times = np.array([])
-        self.qt_result.expect = dq_result.expects
+        self.qt_result.times = np.array(dq_result.tsave)
+        self.qt_result.expect = np.array(dq_result.expects)
         self.qt_result.states = dq.to_qutip(dq_result.states)
+        self.next_t_idx = len(dq_result.tsave)-1
 
     def concatenate_with_new_dq_result_segment(self, dq_result: dq.result.Result):
         # We assume the first recorded time step in this new segment is not the last recorded time step in the previous segment, (setting  t_save[0] = t0 + dt, where dq.Options(t0 = dq_result.tsave[0])
-        self.qt_result.expect = np.concatenate([self.qt_result.expect, dq_result.expects])
-        self.qt_result.states = np.concatenate([self.qt_result.states, dq.to_qutip(dq_result.states)])
-        self.qt_result.times = np.concatenate([self.qt_result.times, dq_result.tsave])
+        self.qt_result.expect = np.concatenate([self.qt_result.expect, np.array(dq_result.expects)], axis=1)
+        self.qt_result.states.extend(dq.to_qutip(dq_result.states))
+        self.qt_result.times = np.concatenate([self.qt_result.times, np.array(dq_result.tsave)])
 
-        self.last_t_idx = self.last_t_idx + len(dq_result.tsave)
+        self.next_t_idx = self.next_t_idx + len(dq_result.tsave)
 
 class CheckpointingJob:
     '''
@@ -59,9 +60,11 @@ class CheckpointingJob:
             with open(self.checkpoint_file_load, 'rb') as f:
                 self.checkpoint = pickle.load(f)
             self.first_segment = False
+            # print(f'Checkpoint loaded, starting from t_idx = {self.checkpoint.next_t_idx}')
         else:
             self.checkpoint = Checkpoint()
             self.first_segment = True
+            # print('No checkpoint loaded, starting from t_idx = 0')
 
     def set_system(self,
                 static_hamiltonian: dq.QArray,
@@ -86,13 +89,11 @@ class CheckpointingJob:
         self.len_t_segment_per_chunk = len_t_segment_per_chunk
 
     def run_segment(self):
-        this_segment_end = self.checkpoint.last_t_idx + self.len_t_segment_per_chunk
-        if this_segment_end > len(self.tsave):
-            this_segment_end = len(self.tsave)
-        elif len(self.tsave) - this_segment_end < 0.5 * self.len_t_segment_per_chunk:
-            this_segment_end = len(self.tsave) # If the remaining time is short, then do all the remaining time
+        next_segment_start = self.checkpoint.next_t_idx + self.len_t_segment_per_chunk
+        if next_segment_start > len(self.tsave):
+            next_segment_start = len(self.tsave)
 
-        segment_t_save = self.tsave[self.checkpoint.last_t_idx:this_segment_end]
+        segment_t_save = self.tsave[self.checkpoint.next_t_idx:next_segment_start+1]
 
         def _H(t:float)->CallableTimeQArray:
             _H = dq.asqarray(self.static_hamiltonian)
@@ -101,12 +102,12 @@ class CheckpointingJob:
             return _H
 
         H =  dq.timecallable(_H, discontinuity_ts = None)
-
+        # print(f"starting from t_idx = {segment_t_save[0].item()}, ending at t_idx = {segment_t_save[-1].item()}")
         segment_result = dq.mesolve(
             H = H,
             rho0 = self.rho0,
             jump_ops = self.jump_ops,
-            tsave = segment_t_save[1:], # The first time step is already in the previous checkpoint
+            tsave = segment_t_save[1:] if not self.first_segment else segment_t_save, # The first time step is already in the previous checkpoint
             exp_ops = self.exp_ops,
             method = self.method,
             options = dq.Options(
@@ -118,23 +119,32 @@ class CheckpointingJob:
             self.checkpoint.convert_from_dq_result(segment_result)
         else:
             self.checkpoint.concatenate_with_new_dq_result_segment(segment_result)
-        if this_segment_end < len(self.tsave):
-            # Step 1: save the segment_result to a checkpoint file
-            # A wrapper script will atomically rename this file to f'{name}.atomic_checkpoint' for the next segment
-            checkpoint_file = f'{self.name}_tdx{this_segment_end}.checkpoint'
-            with open(checkpoint_file, 'wb') as f:
+        if next_segment_start < len(self.tsave):
+            # Step 1: save the segment_result to a temporary checkpoint file
+            temp_checkpoint = f'{self.name}_tdx{next_segment_start}.tmp'
+            with open(temp_checkpoint, 'wb') as f:
                 pickle.dump(self.checkpoint, f)
+                # Ensure data is written to disk
+                f.flush()
+                os.fsync(f.fileno())
+            # print(f'Checkpoint saved temporarily, ended at t_idx = {next_segment_start}')
 
             # Step 2: store the system
-            params = list(inspect.signature(self.set_system).parameters.keys())
-            data = {param: getattr(self, param) for param in params}
-            with open(self.system_file_name, 'wb') as f:
-                pickle.dump(data, f)
+            if not self.system_loaded:
+                params = list(inspect.signature(self.set_system).parameters.keys())
+                data = {param: getattr(self, param) for param in params}
+                with open(self.system_file_name, 'wb') as f:
+                    pickle.dump(data, f)
+                    f.flush()
+                    os.fsync(f.fileno())
 
-            # Step 3: exit the job
+            # Step 3: atomically rename the checkpoint file
+            os.replace(temp_checkpoint, self.checkpoint_file_load)
+
+            # Step 4: exit the job
             sys.exit(85)
-
         else:
             with open(self.qutip_result_file_name, 'wb') as f:
                 pickle.dump(self.checkpoint.qt_result,f)
+            # print(f"result written to {self.qutip_result_file_name}")
             sys.exit(0)
