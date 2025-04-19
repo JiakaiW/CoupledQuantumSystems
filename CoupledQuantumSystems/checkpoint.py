@@ -16,7 +16,7 @@ class Checkpoint:
     last_t_idx: int
     qt_result: qutip.solver.Result
 
-    def convert_from_dq_result(self, dq_result: dq.Result):
+    def convert_from_dq_result(self, dq_result: dq.result.Result):
         self.qt_result = qutip.solver.Result()
         self.qt_result.solver = 'dynamiqs'
         self.qt_result.times = np.array(dq_result.tsave)
@@ -25,7 +25,7 @@ class Checkpoint:
         self.qt_result.num_expect = len(dq_result.exp_ops) if isinstance(dq_result.exp_ops, list) else 0
         self.qt_result.num_collapse = len(dq_result.jump_ops) if isinstance(dq_result.jump_ops, list) else 0
 
-    def concatenate_with_new_dq_result_segment(self, dq_result: dq.Result):
+    def concatenate_with_new_dq_result_segment(self, dq_result: dq.result.Result):
         # We assume the first recorded time step in this new segment is not the last recorded time step in the previous segment, (setting  t_save[0] = t0 + dt, where dq.Options(t0 = dq_result.tsave[0])
         self.qt_result.expect = np.concatenate([self.qt_result.expect, dq_result.expects])
         self.qt_result.states = np.concatenate([self.qt_result.states, dq.to_qutip(dq_result.states)])
@@ -69,12 +69,12 @@ class CheckpointingJob:
             self.last_t_idx = 0
 
     def set_system(self,
-                H: dq.CallableTimeQArray,
+                H: dq.time_qarray.CallableTimeQArray,
                 rho0: dq.QArray,
                 tsave: jnp.ndarray,
                 jump_ops: list[dq.QArray],
                 exp_ops: list[dq.QArray],
-                method: dq.Method = dq.method.Tsit5(max_steps=int(1e9)),
+                method: dq.method.Method = dq.method.Tsit5(max_steps=int(1e9)),
                 len_t_segment_per_chunk: int = 5):
         assert len(jump_ops) == 0 or len(jump_ops) == 1, "len(jump_ops)>1 lead to batching, not supported here"
         self.H = H
@@ -102,7 +102,7 @@ class CheckpointingJob:
             method = self.method,
             options = dq.Options(
                 progress_meter = False,
-                t0 = segment_t_save[0]
+                t0 = segment_t_save[0].item() # Converts from device array to regular float
             )
         )
         self.checkpoint.concatenate_with_new_dq_result_segment(segment_result)
