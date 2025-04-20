@@ -45,7 +45,7 @@ class CheckpointingJob:
         self.name = name
         self.system_file_name = f'{name}_system.pkl'
         self.qutip_result_file_name = f'{name}_result.pkl'
-        self.checkpoint_file_load = f'{name}.atomic_checkpoint'
+        self.checkpoint_file_load = f'checkpoint.atomic'
 
         # Load the system and checkpoint
         if os.path.exists(self.system_file_name):
