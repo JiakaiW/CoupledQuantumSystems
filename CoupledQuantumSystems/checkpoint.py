@@ -60,11 +60,11 @@ class CheckpointingJob:
             with open(self.checkpoint_file_load, 'rb') as f:
                 self.checkpoint = pickle.load(f)
             self.first_segment = False
-            # print(f'Checkpoint loaded, starting from t_idx = {self.checkpoint.next_t_idx}')
+            print(f'Checkpoint loaded, starting from t_idx = {self.checkpoint.next_t_idx}')
         else:
             self.checkpoint = Checkpoint()
             self.first_segment = True
-            # print('No checkpoint loaded, starting from t_idx = 0')
+            print('No checkpoint loaded, starting from t_idx = 0')
 
     def set_system(self,
                 static_hamiltonian: dq.QArray,
@@ -102,7 +102,7 @@ class CheckpointingJob:
             return _H
 
         H =  dq.timecallable(_H, discontinuity_ts = None)
-        # print(f"starting from t_idx = {segment_t_save[0].item()}, ending at t_idx = {segment_t_save[-1].item()}")
+        print(f"starting from t_idx = {segment_t_save[0].item()}, ending at t_idx = {segment_t_save[-1].item()}")
         segment_result = dq.mesolve(
             H = H,
             rho0 = self.rho0,
@@ -127,7 +127,7 @@ class CheckpointingJob:
                 # Ensure data is written to disk
                 f.flush()
                 os.fsync(f.fileno())
-            # print(f'Checkpoint saved temporarily, ended at t_idx = {next_segment_start}')
+            print(f'Checkpoint saved temporarily, ended at t_idx = {next_segment_start}')
 
             # Step 2: store the system
             if not self.system_loaded:
@@ -146,5 +146,5 @@ class CheckpointingJob:
         else:
             with open(self.qutip_result_file_name, 'wb') as f:
                 pickle.dump(self.checkpoint.qt_result,f)
-            # print(f"result written to {self.qutip_result_file_name}")
+            print(f"result written to {self.qutip_result_file_name}")
             sys.exit(0)
