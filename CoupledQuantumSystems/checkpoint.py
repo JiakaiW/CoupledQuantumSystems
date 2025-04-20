@@ -43,7 +43,7 @@ class CheckpointingJob:
     def __init__(self, name: str):
         # Initialize with name, automatically load the system and checkpoint. If successful, then it's ready to run a segment.
         self.name = name
-        self.system_file_name = f'{name}_system.pkl'
+        self.system_file_name = f'system.pkl'
         self.qutip_result_file_name = f'{name}_result.pkl'
         self.checkpoint_file_load = 'checkpoint.atomic'
 
@@ -89,9 +89,11 @@ class CheckpointingJob:
         self.len_t_segment_per_chunk = len_t_segment_per_chunk
 
     def run_segment(self):
+        last_idx = len(self.tsave) - 1
+
         next_segment_start = self.checkpoint.next_t_idx + self.len_t_segment_per_chunk
-        if next_segment_start > len(self.tsave):
-            next_segment_start = len(self.tsave)
+        if next_segment_start > last_idx:
+            next_segment_start = last_idx
 
         segment_t_save = self.tsave[self.checkpoint.next_t_idx:next_segment_start+1]
 
@@ -119,7 +121,7 @@ class CheckpointingJob:
             self.checkpoint.convert_from_dq_result(segment_result)
         else:
             self.checkpoint.concatenate_with_new_dq_result_segment(segment_result)
-        if next_segment_start < len(self.tsave):
+        if next_segment_start < last_idx:
             # Step 1: save the segment_result to a temporary checkpoint file
             temp_checkpoint = f'{self.name}_tdx{next_segment_start}.tmp'
             with open(temp_checkpoint, 'wb') as f:
