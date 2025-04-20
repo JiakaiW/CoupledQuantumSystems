@@ -26,14 +26,13 @@ setup(
         "dynamiqs",
         "nevergrad",
         "rich"
-        # DO NOT include 'jax' here to avoid pulling CPU-only version!
     ],
     extras_require={
         'dev': ['pytest'],
         'jax': [
             "jax[cuda12]"
         ]
-    }
+    },
     classifiers=[
         "Environment :: Console",
         "License :: OSI Approved :: Apache Software License",
