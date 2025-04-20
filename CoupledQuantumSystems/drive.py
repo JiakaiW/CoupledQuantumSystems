@@ -20,10 +20,17 @@ class MathBackend:
         
 @dataclass
 class DriveTerm:
-    '''
-    This class provides a wrapper around pulse_shape_func since qutip doesn't accept duplicate keys in args.
-    When there is multiple pulse with of same pulse_shape_func, pulse_id can be used to distinguish between different pulses.
-    '''
+    """Wrapper for pulse shaping functions and their parameters.
+
+    This class manages drive terms in quantum systems, providing a way to handle
+    multiple pulses with the same shape function by using unique pulse IDs.
+
+    Attributes:
+        driven_op (qutip.Qobj): The operator being driven.
+        pulse_shape_func (Callable): The function defining the pulse shape.
+        pulse_shape_args (Dict[str, float]): Arguments for the pulse shape function.
+        pulse_id (str, optional): Unique identifier for the pulse.
+    """
     driven_op: qutip.Qobj
     pulse_shape_func: Callable
     pulse_shape_args: Dict[str, float]

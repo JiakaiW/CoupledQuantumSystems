@@ -1,3 +1,10 @@
+"""Core quantum system simulation module.
+
+This module provides classes and utilities for simulating coupled quantum systems,
+including qubits, resonators, and their interactions. It supports both QuTiP and
+dynamiqs backends for quantum system evolution.
+"""
+
 import concurrent
 from itertools import product
 import multiprocessing
@@ -15,35 +22,43 @@ from CoupledQuantumSystems.evo import ODEsolve_and_post_process
 from CoupledQuantumSystems.qobj_manip import get_product, get_product_vectorized
 
 class QuantumSystem:
-    '''
-    Base class for quantum systems that provides common functionality for running quantum simulations.
-    This class is meant to be inherited by specific quantum system implementations.
-    '''
+    """Base class for quantum systems providing common simulation functionality.
+
+    This class serves as the foundation for specific quantum system implementations,
+    offering methods for parallel quantum system evolution and state processing.
+    It supports both master equation and Schrödinger equation evolution using
+    QuTiP's solvers.
+
+    Attributes:
+        diag_hamiltonian (qutip.Qobj): Diagonalized Hamiltonian of the system.
+        products_to_keep (List[List[int]]): List of product states to keep in the
+            truncated Hilbert space.
+        product_to_dressed (dict): Mapping from product states to dressed states.
+        qbt_position (int): Position of the qubit in the product state indices.
+    """
 
     def run_qutip_mesolve_parrallel(self,
                                     initial_states: Union[qutip.Qobj,
-                                                         np.ndarray[qutip.Qobj]], # Can be the same for all calls, or different for each call
+                                                         np.ndarray[qutip.Qobj]],
                                     tlist: Union[np.array, 
-                                                 List[np.array]], # Can be the same for all calls, or different for each call
+                                                 List[np.array]],
                                     drive_terms: Union[List[DriveTerm],
-                                                       List[List[DriveTerm]]], # Can be the same for all calls, or different for each call
+                                                       List[List[DriveTerm]]],
                                     c_ops: Union[None,
                                                  List[qutip.Qobj],
-                                                 List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
+                                                 List[List[qutip.Qobj]]],
                                     e_ops: Union[None,
                                                  List[qutip.Qobj],
-                                                 List[List[qutip.Qobj]]], # Can be the same for all calls, or different for each call
-                                    post_processing_funcs=[],  # Currently I have no post_processing written
-                                    post_processing_args=[],  # Currently I have no post_processing written
+                                                 List[List[qutip.Qobj]]],
+                                    post_processing_funcs=[],
+                                    post_processing_args=[],
                                     show_each_thread_progress=False,
                                     show_multithread_progress=False,
-                                    store_states = True,
+                                    store_states=True,
                                     ) -> Union[List[Any],
                                                 List[List[Any]]]:
-        '''
+        """
         num_init_states = len(initial_states)  
-          
-
         num_hamiltonian = 
           = shape(tlist)[0] if tlist is 2d
           = len(drive_terms) if drive_terms is List[List[DriveTerm]]
@@ -52,12 +67,51 @@ class QuantumSystem:
         or if tlist is a single np.array,
         or if drive_terms is a 1d list of DriveTerm,
             then we broadcast them to 2d list (repeat the same operator for all Hamiltonian), as long as one of these inputs indicate multiple Hamiltonians
-
         if num_hamiltonian == 1:
             return a 1d list of results
         else:
             return a 2d list of results, each containing num_init_states evolution results 
-        '''
+            
+        Args:
+            initial_states (Union[qutip.Qobj, np.ndarray[qutip.Qobj]]): Initial
+                quantum states. Can be a single state or an array of states.
+            tlist (Union[np.array, List[np.array]]): Time points for evolution.
+                Can be a single array or a list of arrays.
+            drive_terms (Union[List[DriveTerm], List[List[DriveTerm]]]): Drive
+                terms for the Hamiltonian. Can be a single list or a list of lists.
+            c_ops (Union[None, List[qutip.Qobj], List[List[qutip.Qobj]]]): Collapse
+                operators for the master equation. Can be None, a single list, or
+                a list of lists.
+            e_ops (Union[None, List[qutip.Qobj], List[List[qutip.Qobj]]]): Expectation
+                operators to calculate. Can be None, a single list, or a list of lists.
+            post_processing_funcs (list, optional): List of functions to apply to
+                results after evolution. Defaults to empty list.
+            post_processing_args (list, optional): Arguments for post-processing
+                functions. Defaults to empty list.
+            show_each_thread_progress (bool, optional): Whether to show progress
+                for each parallel thread. Defaults to False.
+            show_multithread_progress (bool, optional): Whether to show overall
+                parallel progress. Defaults to False.
+            store_states (bool, optional): Whether to store quantum states during
+                evolution. Defaults to True.
+                
+        Returns:
+            Union[List[Any], List[List[Any]]]: List of evolution results, possibly
+                post-processed. The structure matches the input structure of
+                initial_states and drive_terms.
+
+        Example:
+            >>> system = QuantumSystem()
+            >>> initial_state = qutip.basis(2, 0)
+            >>> tlist = np.linspace(0, 10, 100)
+            >>> drive = DriveTerm(qutip.sigmax(), lambda t, args: np.sin(t))
+            >>> results = system.run_qutip_mesolve_parrallel(
+            ...     initial_states=[initial_state],
+            ...     tlist=tlist,
+            ...     drive_terms=[[drive]],
+            ...     e_ops=[qutip.sigmaz()]
+            ... )
+        """
         if isinstance(initial_states, qutip.Qobj):
             num_init_states = 1
             initial_states = [initial_states]
@@ -165,123 +219,47 @@ class QuantumSystem:
         else:
             return results
         
-    def run_dq_mesolve_parrallel(self,
-                                 initial_states: qutip.Qobj,  # truncated initial states
-                                 tlist: np.array,
-                                 drive_terms: List[DriveTerm],
-                                 c_ops: Union[None, List[qutip.Qobj]] = None,
-                                 e_ops: Union[None, List[qutip.Qobj]] = None,
-
-                                 post_processing=['pad_back'],
-                                 ):
-        #######################################################
-        #     '''
-        #     This function runs dq.mesolve or dq.sesolve using dq's parrellelism,
-        #     then convert dq.Result into a list of qutip.Result
-        #     and finally use cpu multiprocessing to do post processing steps
-        #         like padding truncated hillbert space back to full dimension,
-        #         or partial trace to get a qubit density matrix
-
-        #     '''
-        #     def _H(t):
-        #         _H = jnp.array(self.diag_hamiltonian)
-        #         for term in drive_terms:
-        #             _H += jnp.array(term.driven_op)* term.pulse_shape_func(t, term.pulse_shape_args)
-        #         return _H
-
-        #     H =  timecallable(_H)
-
-        #     if c_ops == [] or c_ops == None:
-        #         result = dq.sesolve(
-        #             H = H,
-        #             psi0 = initial_states,
-        #             tsave = tlist,
-        #             exp_ops = e_ops,
-        #             solver = dq.solver.Tsit5(
-        #                     rtol= 1e-06,
-        #                     atol= 1e-06,
-        #                     safety_factor= 0.9,
-        #                     min_factor= 0.2,
-        #                     max_factor = 5.0,
-        #                     max_steps = int(1e4*(tlist[-1]-tlist[0])),
-        #                 )
-        #             )
-        #         print(result)
-        #     else:
-        #         result = dq.mesolve(
-        #             H = H,
-        #             jump_ops = c_ops,
-        #             rho0 = initial_states,
-        #             tsave = tlist,
-        #             exp_ops = e_ops,
-        #             solver = dq.solver.Tsit5(
-        #                     rtol= 1e-06,
-        #                     atol= 1e-06,
-        #                     safety_factor= 0.9,
-        #                     min_factor= 0.2,
-        #                     max_factor = 5.0,
-        #                     max_steps = int(1e4*(tlist[-1]-tlist[0])),
-        #                 )
-        #             )
-        #         print(result)
-
-        #     # Convert dq.Result to a list of qutip.solver.Result
-        #     results = []
-        #     for i in range(len(initial_states)):
-        #         qt_result = qutip.solver.Result()
-        #         qt_result.solver = 'dynamiqs'
-        #         qt_result.times = tlist
-        #         qt_result.expect = result.expects[i]
-        #         qt_result.states = dq.to_qutip(result.states[i])
-        #         qt_result.num_expect = len(e_ops) if isinstance(e_ops, list) else 0
-        #         qt_result.num_collapse = len(c_ops) if isinstance(c_ops, list) else 0
-        #         results.append(qt_result)
-
-        #     post_processed_results = [None] * len(results)
-        #     post_processing_funcs = []
-        #     post_processing_args = []
-        #     if 'pad_back' in post_processing:
-        #         post_processing_funcs.append(pad_back_custom)
-        #         post_processing_args.append((self.products_to_keep,
-        #                             self.product_to_dressed))
-        #     if 'partial_trace_computational_states' in post_processing:
-        #         post_processing_funcs.append(dressed_to_2_level_dm)
-        #         post_processing_args.append((
-        #                                     self.product_to_dressed,
-        #                                     self.qbt_position,
-        #                                     self.filtered_product_to_dressed,
-        #                                     self.sign_multiplier,
-        #                                     None
-        #                                     ))
-
-        #     with get_reusable_executor(max_workers=None, context='loky') as executor:
-        #         futures = {executor.submit(post_process,
-        #                                     result = results[i],
-        #                                     post_processing_funcs=post_processing_funcs,
-        #                                     post_processing_args=post_processing_args,
-        #                                     ): i for i in range(len(results))}
-
-        #         for future in concurrent.futures.as_completed(futures):
-        #             original_index = futures[future]
-        #             post_processed_results[original_index] = future.result()
-
-        #     return post_processed_results
-        #######################################################
-        pass
 
 class CoupledSystem(QuantumSystem):
-    '''
-    A parent class for quantum systems involving qubits and oscillators,
+    """Base class for coupled quantum systems.
 
-    This class is meant to be very generic, any specific setup can inherit from this 
-        class and define commonly used attributes in the child class and be as customized as wanted
-    '''
+    This class extends QuantumSystem to handle coupled quantum systems, providing
+    methods for state truncation, padding, and conversion between product and
+    dressed state bases. It serves as the foundation for specific coupled system
+    implementations like qubit-resonator systems.
+
+    Attributes:
+        hilbertspace (scqubits.HilbertSpace): Hilbert space of the coupled system.
+        products_to_keep (List[List[int]]): List of product states to keep in the
+            truncated Hilbert space.
+        qbt_position (int): Position of the qubit in the product state indices.
+        computaional_states (str): String specifying computational states, e.g., '0,1'.
+        sign_multiplier (np.ndarray): Array of sign multipliers for state conversion.
+    """
 
     def __init__(self,
                  hilbertspace,
                  products_to_keep,
                  qbt_position,
                  computaional_states):
+        """Initialize a coupled quantum system.
+
+        Args:
+            hilbertspace (scqubits.HilbertSpace): Hilbert space of the coupled system.
+            products_to_keep (List[List[int]]): List of product states to keep in the
+                truncated Hilbert space.
+            qbt_position (int): Position of the qubit in the product state indices.
+            computaional_states (str): String specifying computational states, e.g., '0,1'.
+
+        Example:
+            >>> hilbertspace = scqubits.HilbertSpace([qubit, resonator])
+            >>> system = CoupledSystem(
+            ...     hilbertspace=hilbertspace,
+            ...     products_to_keep=[[0,0], [0,1], [1,0], [1,1]],
+            ...     qbt_position=0,
+            ...     computaional_states='0,1'
+            ... )
+        """
         self.qbt_position = qbt_position
         self.computaional_states = computaional_states
         self.hilbertspace = hilbertspace
@@ -300,11 +278,16 @@ class CoupledSystem(QuantumSystem):
         self.set_sign_multiplier()
 
     def set_sign_multiplier(self):
-        #############################################################################################
-        #############################################################################################
-        # TODO: This part about getting negative signs can be written more elegantly
-        # Filter product_to_dressed so that it contains only state relevant to the two qubit computational states,
-        # Also modify the original qubit index in the product indices to 0 and 1.
+        """Set sign multipliers for state conversion.
+
+        This method sets up sign multipliers needed for converting between product
+        and dressed state bases. It filters the product_to_dressed mapping to only
+        include states relevant to the computational states and modifies qubit indices.
+
+        Note:
+            This method is called internally during system initialization and when
+            the product states to keep are updated.
+        """
         self.filtered_product_to_dressed = {}
         for product_state, dressed_index in self.product_to_dressed.items():
             if product_state[self.qbt_position] in (self.computaional_states[0], self.computaional_states[1]):
@@ -338,6 +321,14 @@ class CoupledSystem(QuantumSystem):
             self.sign_multiplier_vector[index] = sign
 
     def set_new_product_to_keep(self, products_to_keep):
+        """Update the list of product states to keep.
+
+        Args:
+            products_to_keep (List[List[int]]): New list of product states to keep.
+
+        Example:
+            >>> system.set_new_product_to_keep([[0,0], [0,1], [1,0], [1,1], [2,0]])
+        """
         if products_to_keep == None or products_to_keep == []:
             products_to_keep = list(
                 product(*[range(dim) for dim in self.hilbertspace.subsystem_dims]))
@@ -349,17 +340,61 @@ class CoupledSystem(QuantumSystem):
         )[:, :]))
 
     def truncate_function(self, qobj):
+        """Truncate a quantum object to the kept product states.
+
+        Args:
+            qobj (qutip.Qobj): Quantum object to truncate.
+
+        Returns:
+            qutip.Qobj: Truncated quantum object.
+
+        Example:
+            >>> truncated_state = system.truncate_function(state)
+        """
         return truncate_custom(qobj, self.products_to_keep, self.product_to_dressed)
 
     def pad_back_function(self, qobj):
+        """Pad a truncated quantum object back to full dimension.
+
+        Args:
+            qobj (qutip.Qobj): Truncated quantum object to pad.
+
+        Returns:
+            qutip.Qobj: Padded quantum object.
+
+        Example:
+            >>> padded_state = system.pad_back_function(truncated_state)
+        """
         return pad_back_custom(qobj, self.products_to_keep, self.product_to_dressed)
 
     def convert_dressed_to_product_vectorized(self,
                                              states,
                                              products_to_keep,
                                              num_processes=None,
-                                             update_products_to_keep = True,
+                                             update_products_to_keep=True,
                                              show_progress=False):
+        """Convert dressed states to product states using vectorized operations.
+
+        Args:
+            states (np.ndarray): Array of dressed states to convert.
+            products_to_keep (List[List[int]]): List of product states to keep.
+            num_processes (int, optional): Number of processes to use for parallel
+                computation. Defaults to None (use all available cores).
+            update_products_to_keep (bool, optional): Whether to update the internal
+                products_to_keep list. Defaults to True.
+            show_progress (bool, optional): Whether to show progress bar.
+                Defaults to False.
+
+        Returns:
+            np.ndarray: Array of converted product states.
+
+        Example:
+            >>> product_states = system.convert_dressed_to_product_vectorized(
+            ...     dressed_states,
+            ...     products_to_keep=[[0,0], [0,1], [1,0], [1,1]],
+            ...     show_progress=True
+            ... )
+        """
         if update_products_to_keep:
             self.set_new_product_to_keep(products_to_keep)
             self.set_new_operators_after_setting_new_product_to_keep()
@@ -440,17 +475,59 @@ class CoupledSystem(QuantumSystem):
                                                    store_states=store_states)
 
 class QubitResonatorSystem(CoupledSystem):
+    """System consisting of a qubit coupled to a resonator.
+
+    This class implements a coupled system where a qubit (e.g., transmon or fluxonium)
+    is coupled to a resonator. It provides methods for setting up and manipulating
+    the system's operators and parameters.
+
+    Attributes:
+        kappa (float): Decay rate of the resonator.
+        g_strength (float): Coupling strength between qubit and resonator.
+    """
+
     def set_new_operators_after_setting_new_product_to_keep(self):
+        """Update system operators after changing the product states to keep.
+
+        This method should be called after modifying the product states to keep
+        to ensure all system operators are properly updated for the new basis.
+
+        Note:
+            This method is called internally when the product states to keep are
+            updated through set_new_product_to_keep.
+        """
         self.a_trunc = self.truncate_function(self.a)
         # self.truncate_function(self.hilbertspace.op_in_dressed_eigenbasis(self.osc.n_operator))
         self.driven_operator = self.a_trunc + self.a_trunc.dag()
         self.set_new_kappa(self.kappa)
 
     def set_new_kappa(self, kappa):
+        """Update the resonator decay rate.
+
+        Args:
+            kappa (float): New decay rate for the resonator.
+
+        Example:
+            >>> system.set_new_kappa(0.01)  # Set resonator decay rate to 0.01
+        """
         self.kappa = kappa
         self.c_ops = [np.sqrt(self.kappa) * self.a_trunc]
 
-    def get_ladder_overlap_arr(self,resonator_creation_arr):
+    def get_ladder_overlap_arr(self, resonator_creation_arr):
+        """Calculate overlap between resonator ladder operators and dressed states.
+
+        Args:
+            resonator_creation_arr (np.ndarray): Array representing the resonator
+                creation operator in the product basis.
+
+        Returns:
+            np.ndarray: Array of overlaps between the resonator ladder operator
+                and the dressed states.
+
+        Note:
+            The input resonator_creation_arr should be an identity-padded array
+            where each row represents a dressed ket in the product basis.
+        """
         # resonator_creation_arr should be an id padded arr
         # each row (first index) is a dressed ket in product basis
         evecs_arr_row_dressed_ket = scqubits.utils.spectrum_utils.convert_evecs_to_ndarray(self.evecs)
@@ -467,30 +544,72 @@ class QubitResonatorSystem(CoupledSystem):
         return ladder_overlap
     
 class FluxoniumOscillatorSystem(QubitResonatorSystem):
+    """System consisting of a fluxonium qubit coupled to an oscillator.
+
+    This class implements a coupled system where a fluxonium qubit is coupled to
+    an oscillator (resonator). It provides methods for setting up and manipulating
+    the system's parameters and operators.
+
+    Attributes:
+        EJ (float): Josephson energy of the fluxonium.
+        EC (float): Charging energy of the fluxonium.
+        EL (float): Inductive energy of the fluxonium.
+        qubit_level (float): Number of levels to keep for the fluxonium.
+        Er (float): Energy of the resonator.
+        osc_level (float): Number of levels to keep for the oscillator.
+        kappa (float): Decay rate of the resonator.
+        g_strength (float): Coupling strength between fluxonium and resonator.
+    """
+
     def __init__(self,
                  computaional_states: str = '1,2',
-
                  EJ: float = None,
                  EC: float = None,
                  EL: float = None,
                  qubit_level: float = 13,
-                
-                qbt: scqubits.Fluxonium = None,
+                 qbt: scqubits.Fluxonium = None,
+                 Er: float = None,
+                 osc_level: float = 30,
+                 osc: scqubits.Oscillator = None,
+                 kappa=0.001,
+                 g_strength: float = None,
+                 products_to_keep: List[List[int]] = None):
+        """Initialize a fluxonium-oscillator coupled system.
 
-                Er: float = None,
-                osc_level: float = 30,
+        Args:
+            computaional_states (str, optional): String specifying computational states.
+                Defaults to '1,2'.
+            EJ (float, optional): Josephson energy of the fluxonium. Defaults to None.
+            EC (float, optional): Charging energy of the fluxonium. Defaults to None.
+            EL (float, optional): Inductive energy of the fluxonium. Defaults to None.
+            qubit_level (float, optional): Number of levels to keep for the fluxonium.
+                Defaults to 13.
+            qbt (scqubits.Fluxonium, optional): Pre-initialized fluxonium object.
+                Defaults to None.
+            Er (float, optional): Energy of the resonator. Defaults to None.
+            osc_level (float, optional): Number of levels to keep for the oscillator.
+                Defaults to 30.
+            osc (scqubits.Oscillator, optional): Pre-initialized oscillator object.
+                Defaults to None.
+            kappa (float, optional): Decay rate of the resonator. Defaults to 0.001.
+            g_strength (float, optional): Coupling strength between fluxonium and
+                resonator. Defaults to None.
+            products_to_keep (List[List[int]], optional): List of product states to
+                keep. Defaults to None.
 
-                osc: scqubits.Oscillator = None,
-
-                kappa=0.001,
-
-                g_strength: float = None,
-
-                products_to_keep: List[List[int]] = None,
-                ):
-        '''
-        Initialize objects before truncation
-        '''
+        Example:
+            >>> system = FluxoniumOscillatorSystem(
+            ...     computaional_states='1,2',
+            ...     EJ=2.33,
+            ...     EC=0.69,
+            ...     EL=0.12,
+            ...     qubit_level=13,
+            ...     Er=7.165,
+            ...     osc_level=30,
+            ...     kappa=0.001,
+            ...     g_strength=0.18
+            ... )
+        """
         if qbt is not None:
             self.qbt = qbt
         else:
@@ -518,18 +637,44 @@ class FluxoniumOscillatorSystem(QubitResonatorSystem):
         self.set_new_operators_after_setting_new_product_to_keep()
 
 class TransmonOscillatorSystem(QubitResonatorSystem):
+    """System consisting of a transmon qubit coupled to an oscillator.
+
+    This class implements a coupled system where a transmon qubit is coupled to
+    an oscillator (resonator). It provides methods for setting up and manipulating
+    the system's parameters and operators.
+
+    Attributes:
+        kappa (float): Decay rate of the resonator.
+        g_strength (float): Coupling strength between transmon and resonator.
+    """
+
     def __init__(self,
-                qbt: scqubits.Transmon = None,
-                osc: scqubits.Oscillator = None,
+                 qbt: scqubits.Transmon = None,
+                 osc: scqubits.Oscillator = None,
+                 kappa=0.01,
+                 g_strength: float = None,
+                 products_to_keep: List[List[int]] = None):
+        """Initialize a transmon-oscillator coupled system.
 
-                kappa=0.01,
-                g_strength: float = None,
+        Args:
+            qbt (scqubits.Transmon, optional): Pre-initialized transmon object.
+                Defaults to None.
+            osc (scqubits.Oscillator, optional): Pre-initialized oscillator object.
+                Defaults to None.
+            kappa (float, optional): Decay rate of the resonator. Defaults to 0.01.
+            g_strength (float, optional): Coupling strength between transmon and
+                resonator. Defaults to None.
+            products_to_keep (List[List[int]], optional): List of product states to
+                keep. Defaults to None.
 
-                products_to_keep: List[List[int]] = None,
-                ):
-        '''
-        Initialize objects before truncation
-        '''
+        Example:
+            >>> system = TransmonOscillatorSystem(
+            ...     qbt=transmon,
+            ...     osc=oscillator,
+            ...     kappa=0.01,
+            ...     g_strength=0.1
+            ... )
+        """
         self.qbt = qbt        
         self.osc = osc
 
@@ -549,6 +694,19 @@ class TransmonOscillatorSystem(QubitResonatorSystem):
         self.set_new_operators_after_setting_new_product_to_keep()
 
     def alternative_product_to_dressed(self) -> dict:
+        """Generate an alternative mapping between product and dressed states.
+
+        This method provides an alternative way to map between product states and
+        dressed states, which can be useful in cases where the standard mapping
+        fails or is not optimal.
+
+        Returns:
+            dict: Mapping from product states to dressed states.
+
+        Note:
+            This method is called internally when the standard mapping generation
+            fails during system initialization.
+        """
         id_wrapped_resonator_destory = qutip.tensor(qutip.identity(self.qbt.truncated_dim), qutip.destroy(self.osc.truncated_dim))
         resonator_creation_arr = id_wrapped_resonator_destory.dag().full()
         ladder_overlap = self.get_ladder_overlap_arr(resonator_creation_arr)
@@ -569,9 +727,18 @@ class TransmonOscillatorSystem(QubitResonatorSystem):
         return self.product_to_dressed
     
 class FluxoniumTransmonSystem(CoupledSystem):
-    '''
-    To model leakage detection of 12 fluxonium
-    '''
+    """System consisting of a fluxonium qubit coupled to a transmon qubit.
+
+    This class implements a coupled system where a fluxonium qubit is coupled to
+    a transmon qubit. It provides methods for setting up and manipulating the
+    system's parameters and operators.
+
+    Attributes:
+        fluxonium (scqubits.Fluxonium): The fluxonium qubit object.
+        transmon (scqubits.Transmon): The transmon qubit object.
+        computaional_states (str): String specifying computational states.
+        g_strength (float): Coupling strength between fluxonium and transmon.
+    """
 
     def __init__(self,
                  fluxonium: scqubits.Fluxonium,
@@ -580,10 +747,26 @@ class FluxoniumTransmonSystem(CoupledSystem):
                  g_strength: float = 0.18,
                  products_to_keep: List[List[int]] = None,
                  ):
-        '''
-        Initialize objects before truncation
-        '''
+        """Initialize a fluxonium-transmon coupled system.
 
+        Args:
+            fluxonium (scqubits.Fluxonium): The fluxonium qubit object.
+            transmon (scqubits.Transmon): The transmon qubit object.
+            computaional_states (str): String specifying computational states,
+                e.g., '0,1' or '1,2'.
+            g_strength (float, optional): Coupling strength between fluxonium and
+                transmon. Defaults to 0.18.
+            products_to_keep (List[List[int]], optional): List of product states to
+                keep. Defaults to None.
+
+        Example:
+            >>> system = FluxoniumTransmonSystem(
+            ...     fluxonium=fluxonium_qubit,
+            ...     transmon=transmon_qubit,
+            ...     computaional_states='0,1',
+            ...     g_strength=0.18
+            ... )
+        """
         self.fluxonium = fluxonium
         self.transmon = transmon
         hilbertspace = scqubits.HilbertSpace([self.fluxonium, self.transmon])
@@ -596,22 +779,60 @@ class FluxoniumTransmonSystem(CoupledSystem):
                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])])
 
 class FFTSystem(CoupledSystem):
-    '''
-    !!!!!!!!!!!!! NOT FINISHED !!!!!!!!!!!!!
-    '''
+    """System consisting of two fluxonium qubits coupled to a transmon qubit.
+
+    This class implements a coupled system where two fluxonium qubits are coupled
+    to a transmon qubit, forming a three-qubit system. It provides methods for
+    setting up and manipulating the system's parameters and operators, including
+    special methods for implementing SATD (Shortcut to Adiabaticity) CZ gates.
+
+    Attributes:
+        fluxonium1 (scqubits.Fluxonium): First fluxonium qubit.
+        fluxonium2 (scqubits.Fluxonium): Second fluxonium qubit.
+        transmon (scqubits.Transmon): Transmon qubit.
+        computaional_states (str): String specifying computational states.
+        g_f1f2 (float): Coupling strength between fluxonium qubits.
+        g_f1t (float): Coupling strength between first fluxonium and transmon.
+        g_f2t (float): Coupling strength between second fluxonium and transmon.
+    """
 
     def __init__(self,
                  fluxonium1: scqubits.Fluxonium,
                  fluxonium2: scqubits.Fluxonium,
                  transmon: scqubits.Transmon,
                  computaional_states: str,  # = '0,1' or '1,2'
-
                  g_f1f2: float = 0.1,
                  g_f1t: float = 0.1,
-                 g_f2t:float=0.1,
-                 products_to_keep: List[List[int]] = None,
-                 ):
+                 g_f2t: float = 0.1,
+                 products_to_keep: List[List[int]] = None):
+        """Initialize a two-fluxonium-one-transmon coupled system.
 
+        Args:
+            fluxonium1 (scqubits.Fluxonium): First fluxonium qubit.
+            fluxonium2 (scqubits.Fluxonium): Second fluxonium qubit.
+            transmon (scqubits.Transmon): Transmon qubit.
+            computaional_states (str): String specifying computational states,
+                e.g., '0,1' or '1,2'.
+            g_f1f2 (float, optional): Coupling strength between fluxonium qubits.
+                Defaults to 0.1.
+            g_f1t (float, optional): Coupling strength between first fluxonium and
+                transmon. Defaults to 0.1.
+            g_f2t (float, optional): Coupling strength between second fluxonium and
+                transmon. Defaults to 0.1.
+            products_to_keep (List[List[int]], optional): List of product states to
+                keep. Defaults to None.
+
+        Example:
+            >>> system = FFTSystem(
+            ...     fluxonium1=fluxonium1,
+            ...     fluxonium2=fluxonium2,
+            ...     transmon=transmon,
+            ...     computaional_states='0,1',
+            ...     g_f1f2=0.1,
+            ...     g_f1t=0.1,
+            ...     g_f2t=0.1
+            ... )
+        """
         self.fluxonium1 = fluxonium1
         self.fluxonium2 = fluxonium2
         self.transmon = transmon
@@ -630,8 +851,19 @@ class FFTSystem(CoupledSystem):
                          computaional_states=[int(computaional_states[0]), int(computaional_states[-1])],# computaional_states here is also arbitraray, since it's only used to generate filtered_product_to_dressed to take out the computational subspace of the qubit in post-processing.
                          )
     
-    def get_SATD_CZ_drive_terms(self,
-                               ):
+    def get_SATD_CZ_drive_terms(self):
+        """Generate drive terms for implementing a SATD CZ gate.
+
+        This method generates the necessary drive terms for implementing a
+        Shortcut to Adiabaticity (SATD) CZ gate between the fluxonium qubits.
+
+        Returns:
+            List[DriveTerm]: List of drive terms for the SATD CZ gate.
+
+        Note:
+            The SATD CZ gate implementation follows the protocol described in
+            the literature for fast and high-fidelity two-qubit gates.
+        """
         def P(x):
             return 6*(2*x)**5-15*(2*x)**4+10*(2*x)**3
         def theta(t,tg):
@@ -692,40 +924,89 @@ class FFTSystem(CoupledSystem):
         return drive_terms
 
 class FluxoniumOscillatorFilterSystem(CoupledSystem):
-    '''
-    !!!!!!!!!!!!! NOT FINISHED !!!!!!!!!!!!!
-    '''
+    """System consisting of a fluxonium qubit coupled to an oscillator and a filter.
+
+    This class implements a coupled system where a fluxonium qubit is coupled to
+    an oscillator (resonator) and a filter oscillator. The filter is used to
+    suppress unwanted Purcell decay while maintaining good readout properties.
+    The system is based on the design described in Phys. Rev A 92, 012325 (2015).
+
+    Attributes:
+        qbt (scqubits.Fluxonium): The fluxonium qubit.
+        osc (scqubits.Oscillator): The readout resonator.
+        filter (scqubits.Oscillator): The filter oscillator.
+        G_strength (float): Coupling strength between resonator and filter.
+        a (qutip.Qobj): Annihilation operator for the resonator in dressed basis.
+        a_trunc (qutip.Qobj): Truncated annihilation operator for the resonator.
+        b (qutip.Qobj): Annihilation operator for the filter in dressed basis.
+        b_trunc (qutip.Qobj): Truncated annihilation operator for the filter.
+        driven_operator (qutip.Qobj): Operator used for driving the system.
+        c_ops (List[qutip.Qobj]): Collapse operators for the system.
+        w_d (float, optional): Drive frequency if specified.
+    """
 
     def __init__(self,
                  computaional_states: str,  # = '0,1' or '1,2'
-
                  EJ: float = 2.33,
                  EC: float = 0.69,
                  EL: float = 0.12,
                  qubit_level: float = 13,
-
-
                  Er: float = 7.16518677,
                  osc_level: float = 20,
-
                  Ef: float = 7.13,
                  filter_level: float = 7,
-                 # Ef *2pi = omega_f,  kappa_f = omega_f / Q , kappa_f^{-1} = 0.67 ns
-                 kappa_f=1.5,
-
+                 kappa_f: float = 1.5,
                  g_strength: float = 0.18,
-                 # G satisfies a relation with omega_r in equation 10 of Phys. Rev A 92. 012325 (2015)
                  G_strength: float = 0.3,
-
                  products_to_keep: List[List[int]] = None,
-                 w_d: float = None,
-                 ):
+                 w_d: float = None):
+        """Initialize a fluxonium-oscillator-filter coupled system.
 
-        # Q_f = 30
-        # kappa_f = Ef * 2 * np.pi / Q_f
-        # kappa_r = 0.0001 #we want a really small effective readout resonator decay rate to reduce purcell decay
-        # G_strength =np.sqrt(kappa_f * kappa_r * ( 1 + (2*(Er-Ef)*2*np.pi/kappa_f )**2 ) /4)
+        Args:
+            computaional_states (str): String specifying computational states,
+                e.g., '0,1' or '1,2'.
+            EJ (float, optional): Josephson energy of the fluxonium. Defaults to 2.33.
+            EC (float, optional): Charging energy of the fluxonium. Defaults to 0.69.
+            EL (float, optional): Inductive energy of the fluxonium. Defaults to 0.12.
+            qubit_level (float, optional): Number of levels to keep for the fluxonium.
+                Defaults to 13.
+            Er (float, optional): Energy of the readout resonator. Defaults to 7.16518677.
+            osc_level (float, optional): Number of levels to keep for the resonator.
+                Defaults to 20.
+            Ef (float, optional): Energy of the filter oscillator. Defaults to 7.13.
+            filter_level (float, optional): Number of levels to keep for the filter.
+                Defaults to 7.
+            kappa_f (float, optional): Decay rate of the filter. Defaults to 1.5.
+            g_strength (float, optional): Coupling strength between fluxonium and
+                resonator. Defaults to 0.18.
+            G_strength (float, optional): Coupling strength between resonator and
+                filter. Defaults to 0.3.
+            products_to_keep (List[List[int]], optional): List of product states to
+                keep. Defaults to None.
+            w_d (float, optional): Drive frequency. Defaults to None.
 
+        Note:
+            The filter is designed to suppress Purcell decay while maintaining
+            good readout properties. The coupling strength G_strength is related
+            to the resonator and filter energies and decay rates through the
+            relation in Phys. Rev A 92, 012325 (2015).
+
+        Example:
+            >>> system = FluxoniumOscillatorFilterSystem(
+            ...     computaional_states='0,1',
+            ...     EJ=2.33,
+            ...     EC=0.69,
+            ...     EL=0.12,
+            ...     qubit_level=13,
+            ...     Er=7.165,
+            ...     osc_level=20,
+            ...     Ef=7.13,
+            ...     filter_level=7,
+            ...     kappa_f=1.5,
+            ...     g_strength=0.18,
+            ...     G_strength=0.3
+            ... )
+        """
         self.G_strength = G_strength
 
         self.qbt = scqubits.Fluxonium(

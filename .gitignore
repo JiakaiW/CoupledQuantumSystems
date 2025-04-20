@@ -1,7 +1,65 @@
-_pycache_/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.env/
+.venv/
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# OS
 .DS_Store
-*pycache*
+Thumbs.db
+
+# Project specific
 *.zip
 *.err
 Miniconda3-latest-Linux-x86_64.sh
-# *.pkl
+*.pkl
+*.log
+*.dat
+*.out
+*.tmp
+
+# Documentation
+docs/_build/
+docs/venv/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/

@@ -1,3 +1,9 @@
+"""Fluxonium qubit implementation and analysis tools.
+
+This module provides a specialized implementation of a fluxonium qubit system,
+including methods for calculating transition rates and generating drive terms.
+"""
+
 import concurrent
 from loky import get_reusable_executor
 import numpy as np
@@ -12,6 +18,18 @@ from CoupledQuantumSystems.qobj_manip import *
 from CoupledQuantumSystems.systems import QuantumSystem
 
 class gfIFQ(QuantumSystem):
+    """Fluxonium qubit implementation with additional analysis capabilities.
+
+    This class extends the basic Fluxonium implementation to include methods for
+    calculating transition rates and generating drive terms for quantum operations.
+
+    Attributes:
+        EJ (float): Josephson energy.
+        EC (float): Charging energy.
+        EL (float): Inductive energy.
+        cutoff (int): Number of energy levels to consider.
+        flux (float): External magnetic flux.
+    """
     def __init__(self,
                  EJ,
                  EC,

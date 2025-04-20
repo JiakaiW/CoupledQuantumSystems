@@ -51,4 +51,4 @@ CMD ["python3"]
 
 
 # Use: in terminal run
-# docker build --no-cache -t coupledquantumsystems:v13 .
+# docker build --no-cache -t coupledquantumsystems:v15 .

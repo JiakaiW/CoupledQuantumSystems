@@ -1,3 +1,10 @@
+"""Optimization utilities for quantum systems.
+
+This module provides tools for optimizing parameters of quantum systems using parallel processing
+and progress tracking. It includes a progress visualization system and optimization runners
+that work with Nevergrad optimizers.
+"""
+
 from concurrent.futures import ProcessPoolExecutor
 from rich.live import Live
 from rich.table import Table
@@ -6,14 +13,41 @@ import time
 
 
 class OptimizationProgress:
-    """Generic progress tracker for optimization tasks."""
+    """Tracks and displays the progress of optimization tasks.
+
+    This class provides a rich text-based progress display for optimization tasks,
+    showing current parameters, best results, and timing information.
+
+    Attributes:
+        title (str): Title for the progress table.
+        param_names (list): List of parameter names to display.
+        extra_params (dict): Additional parameters to display in title.
+        best_value (float): Current best optimization value.
+        best_params (dict): Parameters corresponding to the best value.
+        current_budget (int): Remaining optimization budget.
+        running_jobs (int): Number of currently running optimization jobs.
+        current_evaluations (list): List of current evaluation results.
+        start_time (float): Time when optimization started.
+        total_evaluations (int): Total number of evaluations performed.
+    """
+
     def __init__(self, title, param_names, budget, extra_params=None):
-        """
+        """Initialize the progress tracker.
+
         Args:
-            title (str): Title for the progress table
-            param_names (list): List of parameter names to display
-            budget (int): Total optimization budget
-            extra_params (dict, optional): Additional parameters to display in title
+            title (str): Title for the progress table.
+            param_names (list): List of parameter names to display.
+            budget (int): Total optimization budget.
+            extra_params (dict, optional): Additional parameters to display in title.
+                Defaults to None.
+
+        Example:
+            >>> progress = OptimizationProgress(
+            ...     title="Quantum Gate Optimization",
+            ...     param_names=["frequency", "amplitude"],
+            ...     budget=1000,
+            ...     extra_params={"system": "qubit"}
+            ... )
         """
         self.title = title
         self.param_names = param_names
@@ -27,6 +61,11 @@ class OptimizationProgress:
         self.total_evaluations = 0
     
     def create_table(self):
+        """Create a rich table displaying the current optimization progress.
+
+        Returns:
+            rich.table.Table: A formatted table showing optimization progress.
+        """
         # Create title with extra parameters if provided
         title = self.title
         if self.extra_params:
@@ -85,7 +124,23 @@ class OptimizationProgress:
         return table
     
     def update(self, value, params=None, budget=None, running_jobs=None):
-        """Update the progress tracker with new information."""
+        """Update the progress tracker with new information.
+
+        Args:
+            value (float, optional): New optimization value. If better than current best,
+                updates the best value and parameters.
+            params (dict, optional): Parameters corresponding to the new value.
+            budget (int, optional): Updated remaining budget.
+            running_jobs (int, optional): Updated number of running jobs.
+
+        Example:
+            >>> progress.update(
+            ...     value=0.123,
+            ...     params={"frequency": 1.0, "amplitude": 0.5},
+            ...     budget=950,
+            ...     running_jobs=4
+            ... )
+        """
         if value is not None and value < self.best_value:
             self.best_value = value
             self.best_params = params
@@ -100,13 +155,23 @@ class OptimizationProgress:
                 self.current_evaluations = self.current_evaluations[-self.running_jobs:]
 
 def evaluate_candidate(candidate, objective_fn, **kwargs):
-    """
-    Generic function to evaluate a candidate solution.
-    
+    """Evaluate a candidate solution using the objective function.
+
     Args:
-        candidate: Nevergrad candidate
-        objective_fn: Function to optimize
-        **kwargs: Additional arguments to pass to objective_fn
+        candidate (nevergrad.parametrization.Parameter): Candidate solution to evaluate.
+        objective_fn (callable): Function to optimize. Should accept the candidate's
+            parameters as keyword arguments.
+        **kwargs: Additional arguments to pass to objective_fn.
+
+    Returns:
+        tuple: (candidate, value) containing the evaluated candidate and its objective value.
+            If evaluation fails, returns (candidate, float('inf')).
+
+    Example:
+        >>> def objective(frequency, amplitude):
+        ...     return (frequency - 1.0)**2 + (amplitude - 0.5)**2
+        >>> candidate = nevergrad.p.Instrumentation(frequency=1.1, amplitude=0.6)
+        >>> result = evaluate_candidate(candidate, objective)
     """
     try:
         value = objective_fn(**kwargs, **candidate.kwargs)
@@ -116,29 +181,50 @@ def evaluate_candidate(candidate, objective_fn, **kwargs):
         return candidate, float('inf')
 
 def run_optimization_with_progress(optimizer, 
-                                   objective_fn, 
-                                   param_names, 
-                                   title, 
-                                   budget, 
-                                   num_workers, 
-                                   show_live=True, 
-                                   **kwargs):
-    """
-    Generic optimization runner with progress tracking.
-    
+                                 objective_fn, 
+                                 param_names, 
+                                 title, 
+                                 budget, 
+                                 num_workers, 
+                                 show_live=True, 
+                                 **kwargs):
+    """Run an optimization process with progress tracking and parallel evaluation.
+
+    This function manages the optimization process, including parallel evaluation
+    of candidates and progress visualization.
+
     Args:
-        optimizer: Nevergrad optimizer instance
-        objective_fn: Function to optimize
-        param_names: List of parameter names
-        title: Title for the progress display
-        budget: Total optimization budget
-        num_workers: Number of parallel workers
-        show_live (bool): Whether to show the live progress table
-        **kwargs: Additional arguments to pass to objective_fn
-    
+        optimizer (nevergrad.optimization.Optimizer): Nevergrad optimizer instance.
+        objective_fn (callable): Function to optimize. Should accept parameters
+            as keyword arguments.
+        param_names (list): List of parameter names to display in progress.
+        title (str): Title for the progress display.
+        budget (int): Total optimization budget (number of evaluations).
+        num_workers (int): Number of parallel workers for evaluation.
+        show_live (bool, optional): Whether to show the live progress table.
+            Defaults to True.
+        **kwargs: Additional arguments to pass to objective_fn.
+
     Returns:
-        tuple: (recommendation, progress) containing the optimizer's final recommendation 
-        and the progress tracker
+        tuple: (recommendation, progress) containing:
+            - recommendation: The optimizer's final recommendation
+            - progress: The OptimizationProgress instance tracking the optimization
+
+    Example:
+        >>> optimizer = nevergrad.optimizers.OnePlusOne(
+        ...     parametrization=nevergrad.p.Instrumentation(
+        ...         frequency=nevergrad.p.Scalar(),
+        ...         amplitude=nevergrad.p.Scalar()
+        ...     )
+        ... )
+        >>> result, progress = run_optimization_with_progress(
+        ...     optimizer=optimizer,
+        ...     objective_fn=objective,
+        ...     param_names=["frequency", "amplitude"],
+        ...     title="Gate Optimization",
+        ...     budget=1000,
+        ...     num_workers=4
+        ... )
     """
     progress = OptimizationProgress(title, param_names, budget, kwargs)
     

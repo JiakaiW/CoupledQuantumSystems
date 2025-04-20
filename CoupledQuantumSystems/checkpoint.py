@@ -1,3 +1,9 @@
+"""Checkpointing utilities for quantum system evolution.
+
+This module provides tools for saving and loading quantum system evolution states,
+allowing for resumable long-running simulations. It's meant for simulation on GPU and storage as qutip objects.
+"""
+
 import pickle
 import qutip
 import dynamiqs as dq
@@ -10,17 +16,34 @@ import sys
 from CoupledQuantumSystems.drive import DriveTerm
 
 class Checkpoint:
-    '''
-    Checkpoint data should be store as qutip data, instead of data in VRAM (dynamiqs.Result).
-    '''
-    next_t_idx: int
-    qt_result: qutip.solver.Result
-    
+    """Stores the state of a quantum system evolution.
+
+    This class maintains the state of a quantum system evolution, including
+    the current time index, quantum states, and expectation values. It provides
+    methods to convert between dynamiqs and QuTiP result formats and to
+    concatenate new evolution segments.
+
+    Attributes:
+        next_t_idx (int): Index of the next time step to evolve.
+        qt_result (qutip.solver.Result): QuTiP result object containing the
+            evolution history.
+    """
+
     def __init__(self):
+        """Initialize an empty checkpoint."""
         self.next_t_idx = 0
         self.qt_result = qutip.solver.Result()
 
     def convert_from_dq_result(self, dq_result: dq.result.Result):
+        """Convert a dynamiqs result to QuTiP format and store it.
+
+        Args:
+            dq_result (dq.result.Result): Dynamiqs evolution result to convert.
+
+        Note:
+            This method sets the solver name to 'dynamiqs' and converts all
+            states and expectation values to QuTiP format.
+        """
         self.qt_result.solver = 'dynamiqs'
         self.qt_result.times = np.array(dq_result.tsave)
         self.qt_result.expect = np.array(dq_result.expects)
@@ -28,7 +51,17 @@ class Checkpoint:
         self.next_t_idx = len(dq_result.tsave)-1
 
     def concatenate_with_new_dq_result_segment(self, dq_result: dq.result.Result):
-        # We assume the first recorded time step in this new segment is not the last recorded time step in the previous segment, (setting  t_save[0] = t0 + dt, where dq.Options(t0 = dq_result.tsave[0])
+        """Concatenate a new evolution segment to the existing checkpoint. We assume the first recorded time step in this new segment is not the last recorded time step in the previous segment, 
+        (setting  t_save[0] = t0 + dt, where dq.Options(t0 = dq_result.tsave[0])
+
+        Args:
+            dq_result (dq.result.Result): New evolution segment to append.
+
+        Note:
+            This method assumes the first time step in the new segment is
+            not the last time step in the previous segment. It concatenates
+            the times, states, and expectation values arrays.
+        """
         self.qt_result.expect = np.concatenate([self.qt_result.expect, np.array(dq_result.expects)], axis=1)
         self.qt_result.states.extend(dq.to_qutip(dq_result.states))
         self.qt_result.times = np.concatenate([self.qt_result.times, np.array(dq_result.tsave)])
@@ -36,11 +69,33 @@ class Checkpoint:
         self.next_t_idx = self.next_t_idx + len(dq_result.tsave)
 
 class CheckpointingJob:
-    '''
-    This class is used to save and load the data that describe the system and partial evolution results.
-    Essentially, it breaks down the evolution into segments, and save the partial results as checkpoints, then it automatically exists, and wait for HTCondor to reschedule the next segment.
-    '''
+    """Manages checkpointed quantum system evolution jobs.
+
+    This class handles the saving and loading of quantum system evolution states,
+    breaking down long evolutions into segments that can be resumed after
+    interruption. It is designed to work with HTCondor job scheduling.
+
+    Attributes:
+        name (str): Name of the job.
+        system_file_name (str): Name of the file storing system parameters.
+        qutip_result_file_name (str): Name of the file for final results.
+        checkpoint_file_load (str): Name of the checkpoint file.
+        system_loaded (bool): Whether the system parameters have been loaded.
+        first_segment (bool): Whether this is the first evolution segment.
+        checkpoint (Checkpoint): Current checkpoint state.
+    """
+
     def __init__(self, name: str):
+        """Initialize a checkpointing job.
+
+        Args:
+            name (str): Name of the job, used for file naming.
+
+        Note:
+            This method attempts to load existing system parameters and
+            checkpoint data if available. If no checkpoint exists, it
+            initializes a new checkpoint.
+        """
         # Initialize with name, automatically load the system and checkpoint. If successful, then it's ready to run a segment.
         self.name = name
         self.system_file_name = f'system.pkl'
@@ -75,9 +130,25 @@ class CheckpointingJob:
                 exp_ops: list[dq.QArray],
                 method: dq.method.Method = dq.method.Tsit5(max_steps=int(1e9)),
                 len_t_segment_per_chunk: int = 5):
-        '''
-        Disassemble the hamiltonian into serializable components.
-        '''
+        """Set up the quantum system for evolution.
+
+        Args:
+            static_hamiltonian (dq.QArray): Static part of the Hamiltonian.
+            drive_terms (list[DriveTerm]): List of drive terms for the Hamiltonian.
+            rho0 (dq.QArray): Initial state of the system.
+            tsave (jnp.ndarray): Time points at which to save the state.
+            jump_ops (list[dq.QArray]): List of jump operators for the master equation.
+            exp_ops (list[dq.QArray]): List of operators for expectation values.
+            method (dq.method.Method, optional): Integration method to use.
+                Defaults to Tsit5 with max_steps=1e9.
+            len_t_segment_per_chunk (int, optional): Length of each evolution segment.
+                Defaults to 5.
+
+        Note:
+            The jump_ops list must be empty or contain exactly one operator,
+            as multiple jump operators would require batching which is not
+            supported in this implementation.
+        """
         assert len(jump_ops) == 0 or len(jump_ops) == 1, "len(jump_ops)>1 lead to batching, not supported here"
         self.static_hamiltonian = static_hamiltonian
         self.drive_terms = drive_terms
@@ -89,6 +160,21 @@ class CheckpointingJob:
         self.len_t_segment_per_chunk = len_t_segment_per_chunk
 
     def run_segment(self):
+        """Run a single evolution segment and handle checkpointing.
+
+        This method:
+        1. Determines the time range for the next segment
+        2. Constructs the time-dependent Hamiltonian
+        3. Runs the evolution for the segment
+        4. Updates the checkpoint
+        5. Saves the checkpoint if more segments remain
+        6. Saves the final result if this is the last segment
+
+        Note:
+            If more segments remain after this one, the method will exit with
+            code 85 to signal HTCondor to reschedule the job. If this is the
+            final segment, it will save the complete result and exit with code 0.
+        """
         last_idx = len(self.tsave) - 1
 
         next_segment_start = self.checkpoint.next_t_idx + self.len_t_segment_per_chunk
