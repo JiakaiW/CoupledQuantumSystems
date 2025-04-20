@@ -13,7 +13,8 @@ pip3 install git+https://github.com/JiakaiW/CoupledQuantumSystems
 
 to use it with dynamiqs, you need jax with GPU, e.g.:
 '''
-pip install --upgrade "jax[cuda12]"
+pip install "git+https://github.com/JiakaiW/CoupledQuantumSystems#egg=CoupledQuantumSystems[jax]" \
+    -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 '''
 
 ![workflow of quantum simulation using this package](assets/CoupledQuantumSystems.png)

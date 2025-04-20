@@ -5,7 +5,7 @@
 # RUN pip3 install git+https://github.com/JiakaiW/CoupledQuantumSystems
 
 # For GPU:
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
 
 # Install Python 3.10 and basic tools
 RUN apt-get update && \
@@ -16,18 +16,15 @@ RUN apt-get update && \
     curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+
 # Symlink python3.10 as default python
 RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
-    ln -sf /usr/bin/python3.10 /usr/bin/python3 && \
-    python3 -m ensurepip
+    ln -sf /usr/bin/python3.10 /usr/bin/python3
 
-# Upgrade pip and install everything directly into system environment
 RUN python3 -m pip install --upgrade pip setuptools wheel && \
-    python3 -m pip install "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html && \
-    python3 -m pip install --force-reinstall --no-cache-dir git+https://github.com/JiakaiW/CoupledQuantumSystems
+    python3 -m pip install --force-reinstall --no-cache-dir "git+https://github.com/JiakaiW/CoupledQuantumSystems#egg=CoupledQuantumSystems[jax]"
 
-RUN python3 -c "import jax, pyparsing; print('JAX:', jax.__version__, '| pyparsing:', pyparsing.__version__)"
-
+CMD ["python3"]
 
 # Use: in terminal run
 # docker build --no-cache -t coupledquantumsystems:v12 .

@@ -17,20 +17,23 @@ setup(
     license="Apache 2.0",
     packages=find_namespace_packages(exclude=['notebooks']),
     install_requires=[
-            "scipy==1.12.0",
-            "numpy==1.26.4",
-            "qutip==4.7.5",
-            "scqubits==4.0.0",
-            "loky",
-            "bidict",
-            "dynamiqs",
-            "nevergrad",
-            "rich"
-        ],
+        "scipy==1.12.0",
+        "numpy==1.26.4",
+        "qutip==4.7.5",
+        "scqubits==4.0.0",
+        "loky",
+        "bidict",
+        "dynamiqs",
+        "nevergrad",
+        "rich"
+        # DO NOT include 'jax' here to avoid pulling CPU-only version!
+    ],
     extras_require={
         'dev': ['pytest'],
-        'jax': ['jax']
-    },
+        'jax': [
+            "jax[cuda12]"
+        ]
+    }
     classifiers=[
         "Environment :: Console",
         "License :: OSI Approved :: Apache Software License",
