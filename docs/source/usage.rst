@@ -44,30 +44,29 @@ Advanced Features
 CPU Multiprocessing with QuTiP
 -----------------------------
 
-The package provides efficient CPU multiprocessing for QuTiP solvers.
+The package provides efficient CPU multiprocessing for QuTiP solvers using the `run_qutip_mesolve_parrallel` method.
 
 Basic Usage
 ~~~~~~~~~~
 
 .. code-block:: python
 
-    from CoupledQuantumSystems import run_parallel_ODEsolve_and_post_process_jobs_with_different_systems
-    from loky import get_reusable_executor
+    from CoupledQuantumSystems import QuantumSystem
 
-    # Prepare your systems and parameters
-    systems = [system1, system2, system3]
-    kwargs_list = [
-        {'y0': y0_1, 'tlist': tlist_1, 'drive_terms': drive_terms_1},
-        {'y0': y0_2, 'tlist': tlist_2, 'drive_terms': drive_terms_2},
-        {'y0': y0_3, 'tlist': tlist_3, 'drive_terms': drive_terms_3}
-    ]
+    # Initialize your quantum system
+    system = QuantumSystem()
+
+    # Prepare your initial states and parameters
+    initial_states = [qutip.basis(2, 0)]
+    tlist = np.linspace(0, 10, 100)
+    drive_terms = [DriveTerm(qutip.sigmax(), lambda t, args: np.sin(t))]
 
     # Run parallel simulations
-    results = run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
-        list_of_systems=systems,
-        list_of_kwargs=kwargs_list,
-        max_workers=4,  # Number of CPU cores to use
-        store_states=True
+    results = system.run_qutip_mesolve_parrallel(
+        initial_states=initial_states,
+        tlist=tlist,
+        drive_terms=[drive_terms],
+        e_ops=[qutip.sigmaz()]
     )
 
 Performance Tips
@@ -77,65 +76,10 @@ Performance Tips
 - Adjust ``max_workers`` based on your CPU capabilities
 - Consider memory usage when storing states
 
-GPU Acceleration with dynamiqs
-----------------------------
+GPU Acceleration
+----------------
 
-The package supports GPU-accelerated simulations using dynamiqs with checkpointing capabilities.
-
-Basic Usage
-~~~~~~~~~~
-
-.. code-block:: python
-
-    from CoupledQuantumSystems import DynamiqsSolver
-
-    # Initialize the solver
-    solver = DynamiqsSolver(
-        system=your_system,
-        checkpoint_interval=1000,  # Save state every 1000 steps
-        checkpoint_dir='./checkpoints'
-    )
-
-    # Run simulation
-    result = solver.solve(
-        tlist=tlist,
-        y0=y0,
-        drive_terms=drive_terms,
-        use_gpu=True  # Enable GPU acceleration
-    )
-
-    # Load from checkpoint if needed
-    result = solver.load_from_checkpoint('checkpoint_1000.npz')
-
-Checkpointing Features
-~~~~~~~~~~~~~~~~~~~~
-
-- Automatic checkpointing at specified intervals
-- Manual checkpoint saving and loading
-- GPU memory management
-- State vector compression options
-
-Advanced Configuration
-~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-    solver = DynamiqsSolver(
-        system=your_system,
-        checkpoint_interval=1000,
-        checkpoint_dir='./checkpoints',
-        compression_level=3,  # Higher compression, slower save/load
-        gpu_memory_fraction=0.8,  # Limit GPU memory usage
-        use_mixed_precision=True  # Use mixed precision for better performance
-    )
-
-Performance Considerations
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-- Adjust checkpoint interval based on simulation duration
-- Use compression for large state vectors
-- Monitor GPU memory usage
-- Consider mixed precision for faster computation
+Currently, the package does not support GPU acceleration with `DynamiqsSolver`. Please refer to the latest updates in the repository for future support.
 
 Example Notebooks
 ---------------
