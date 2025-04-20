@@ -30,10 +30,10 @@ html_css_files = ['custom.css']
 # Add GitHub link
 html_context = {
     'display_github': True,
-    'github_user': 'JiakaiWang',  # Your GitHub username
-    'github_repo': 'CoupledQuantumSystems',  # Your repository name
-    'github_version': 'main',  # Your default branch
-    'conf_py_path': '/docs/source/',  # Path in the checkout to the docs root
+    'github_user': 'jiakaiw',  # Updated GitHub username
+    'github_repo': 'CoupledQuantumSystems',
+    'github_version': 'main',
+    'conf_py_path': '/docs/source/',
 }
 
 # -- Extension configuration -------------------------------------------------
