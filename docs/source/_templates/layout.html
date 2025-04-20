@@ -1,0 +1,11 @@
+{% extends "!layout.html" %}
+
+{% block extrahead %}
+{{ super() }}
+<div class="github-link">
+    <a href="https://github.com/{{ github_user }}/{{ github_repo }}" target="_blank">
+        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub">
+        <span>View on GitHub</span>
+    </a>
+</div>
+{% endblock %} 

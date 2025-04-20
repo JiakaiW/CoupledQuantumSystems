@@ -25,6 +25,16 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
+html_css_files = ['custom.css']
+
+# Add GitHub link
+html_context = {
+    'display_github': True,
+    'github_user': 'JiakaiWang',  # Your GitHub username
+    'github_repo': 'CoupledQuantumSystems',  # Your repository name
+    'github_version': 'main',  # Your default branch
+    'conf_py_path': '/docs/source/',  # Path in the checkout to the docs root
+}
 
 # -- Extension configuration -------------------------------------------------
 autodoc_member_order = 'bysource'

@@ -1,0 +1,24 @@
+/* GitHub link styling */
+.github-link {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-bottom-left-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.github-link a {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: #333;
+}
+
+.github-link img {
+    width: 24px;
+    height: 24px;
+    margin-right: 5px;
+} 
