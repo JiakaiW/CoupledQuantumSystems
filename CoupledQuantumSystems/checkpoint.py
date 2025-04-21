@@ -193,7 +193,7 @@ class CheckpointingJob:
         print(f"starting from t_idx = {segment_t_save[0].item()}, ending at t_idx = {segment_t_save[-1].item()}")
         segment_result = dq.mesolve(
             H = H,
-            rho0 = self.rho0,
+            rho0 = self.rho0 if self.first_segment else dq.asqarray(self.checkpoint.qt_result.states[-1]),
             jump_ops = self.jump_ops,
             tsave = segment_t_save[1:] if not self.first_segment else segment_t_save, # The first time step is already in the previous checkpoint
             exp_ops = self.exp_ops,
