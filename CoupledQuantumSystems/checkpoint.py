@@ -97,8 +97,6 @@ class CheckpointingJob:
             initializes a new checkpoint.
         """
         
-        dq.set_precision('double')
-
         # Initialize with name, automatically load the system and checkpoint. If successful, then it's ready to run a segment.
         self.name = name
         self.system_file_name = f'system.pkl'
