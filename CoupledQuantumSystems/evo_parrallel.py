@@ -52,7 +52,7 @@ def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
                 y0=list_of_kwargs[i]['y0'], 
                 tlist=list_of_kwargs[i]['tlist'], 
 
-                static_hamiltonian=list_of_systems[i].diag_dressed_hamiltonian,
+                static_hamiltonian=list_of_systems[i].diag_hamiltonian,
                 drive_terms=list_of_kwargs[i].get('drive_terms', None),
                 c_ops=list_of_kwargs[i].get('c_ops', None),
                 e_ops=list_of_kwargs[i].get('e_ops', None),
