@@ -172,10 +172,111 @@ def sin_squared_DRAG_with_modulation(t, args={},math=np):
     )
     envelope_derivative = math.where(
         inside_window,
-        math.sin(2 * math.pi * (t - t_start) / t_duration),
+        (2*math.pi/t_duration) *math.sin(2 * math.pi * (t - t_start) / t_duration),
         0.0
     )
     return ( amp * envelope + 1j* amp_correction * envelope_derivative ) * cos_modulation() 
+
+def recursive_drag_coeffs(delta1, delta2, amp):
+    """
+    Parameters
+    ----------
+    delta1, delta2 : float
+        Detunings |ω_unwanted - ω_drive|  **in rad/s**  (use 2π·MHz).
+    amp            : float
+        Base in-phase amplitude used for the main envelope.
+
+    Returns
+    -------
+    kappa1, kappa2 : floats
+        Coefficients that multiply the first and second envelope
+        derivatives, respectively, following Li et al. (2024).
+
+    Formula (Li, Appendix D):
+        κ₂ = - A / (Δ₁ Δ₂)
+        κ₁ =   A (Δ₁ + Δ₂) / (Δ₁ Δ₂)
+    """
+    kappa2 = -amp / (delta1 * delta2)
+    kappa1 =  amp * (delta1 + delta2) / (delta1 * delta2)
+    return kappa1, kappa2
+
+
+def sin_squared_recursive_DRAG(t, args=None, math=np):
+    """
+    Recursive‑DRAG pulse that punches out *two* notches.
+
+    Required keys in `args`
+    -----------------------
+    w_d      : drive **frequency** in Hz (not radians/s)
+    amp      : real in‑phase amplitude A
+    delta1   : detuning Δ₁  (rad/s) of 1st unwanted transition
+    delta2   : detuning Δ₂  (rad/s) of 2nd unwanted transition
+               (use ±2π·MHz etc.; sign does not matter)
+    t_duration : pulse length (s)
+
+    Optional keys
+    -------------
+    t_start : left edge of pulse window (default 0 s)
+    phi     : global phase of the carrier (default 0)
+    """
+
+    # fall‑back so args can be omitted in interactive calls
+    if args is None:
+        args = {}
+
+    w_d        = args['w_d']
+    amp        = args['amp']
+    delta1     = args['delta1']
+    delta2     = args['delta2']
+    t_duration = args['t_duration']
+
+    t_start = args.get('t_start', 0.0)
+    phi     = args.get('phi', 0.0)
+
+    # ---- DRAG coefficients that set the two spectral zeros ----
+    kappa1, kappa2 = recursive_drag_coeffs(delta1, delta2, amp)
+
+    # ---- handy aliases ----
+    two_pi_over_T  = 2.0 * math.pi / t_duration
+    pi_over_T      = math.pi / t_duration
+
+    # ---- rectangular window ----
+    inside = (t >= t_start) & (t <= t_start + t_duration)
+
+    # ---- sin² envelope and its first two derivatives ----
+    envelope = math.where(
+        inside,
+        math.sin(math.pi * (t - t_start) / t_duration) ** 2,
+        0.0
+    )
+
+    # 1st derivative:  (π/T)·sin(2πτ)  with τ = (t‑t₀)/T
+    envelope_d1 = math.where(
+        inside,
+        pi_over_T * math.sin(two_pi_over_T * (t - t_start)),
+        0.0
+    )
+
+    # 2nd derivative:  (2π/T)² · (cos(2πτ) – 1)
+    #  (the “–1” keeps the derivative continuous at the edges)
+    envelope_d2 = math.where(
+        inside,
+        2.0 * (pi_over_T ** 2) *
+        (math.cos(two_pi_over_T * (t - t_start)) - 1.0),
+        0.0
+    )
+
+    # ---- complex base‑band envelope ----
+    baseband = (
+        amp * envelope +
+        1j * kappa1 * envelope_d1 +
+        kappa2 * envelope_d2
+    )
+
+    # ---- up‑convert with cosine modulation (∝ Re{…}) ----
+    modulation = math.cos(2.0 * math.pi * w_d * t - phi)
+
+    return baseband * modulation
 
 def gaussian_pulse(t, args={},math=np):
     w_d = args['w_d']
