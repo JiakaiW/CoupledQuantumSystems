@@ -154,14 +154,11 @@ def sin_squared_pulse_with_modulation(t, args={},math=np):
 def sin_squared_DRAG_with_modulation(t, args={},math=np):
     w_d = args['w_d']
     amp = args['amp']
-    amp_correction = args['amp_correction']
+    amp_correction = args['amp_correction'] # Usage: amp_ratio = -1/(2*np.pi* Delta), amp_correction = amp_ratio * amp
     t_duration = args.get('t_duration')
     t_start = args.get('t_start', 0)  # Default start time is 0
     phi = args.get('phi', 0)
 
-    def cos_modulation():
-        return 2 * math.pi * math.cos(w_d * 2 * math.pi * t - phi)
-    
     t_end = t_start + t_duration  # End of the pulse
     
     inside_window = (t >= t_start) & (t <= t_end)
@@ -172,10 +169,11 @@ def sin_squared_DRAG_with_modulation(t, args={},math=np):
     )
     envelope_derivative = math.where(
         inside_window,
-        (2*math.pi/t_duration) *math.sin(2 * math.pi * (t - t_start) / t_duration),
+        (math.pi/t_duration) *math.sin(2 * math.pi * (t - t_start) / t_duration),
         0.0
     )
-    return ( amp * envelope + 1j* amp_correction * envelope_derivative ) * cos_modulation() 
+    return 2 * math.pi *amp * envelope * math.cos(w_d * 2 * math.pi * t - phi) + \
+        -1j * 2 * math.pi * amp_correction * envelope_derivative * math.cos(w_d * 2 * math.pi * t - phi)
 
 def recursive_drag_coeffs(delta1, delta2, amp):
     """
@@ -369,3 +367,82 @@ def STIRAP_with_modulation(t,args = {},math=np):
         return (hyper_Gaussian_F(t)- a)/(1-a)* math.cos(math.pi/2 * mono_increasing_f(t)) * cos_modulation()
     else:
         return (hyper_Gaussian_F(t)- a)/(1-a) * math.sin(math.pi/2 * mono_increasing_f(t)) * cos_modulation()
+    
+
+def Hyper_Gaussian_DRAG_STIRAP_stoke_jk(t, args, math=np):
+    # stoke is the first pulse
+    w_d   = args['w_d']
+    amp   = args['amp']
+    amp_correction = args['amp_correction']
+    t_stop = args['t_stop']
+    t_start = args.get('t_start', 0.0)
+    phi   = args.get('phi', 0.0)
+    # --- helpers reused from your code -----------------------------
+    λ         = 4.0
+    τ_mono    = (t_stop - t_start) / 6.0
+    centre    = (t_stop + t_start) / 2.0 + t_start
+    def mono(t):
+        return 1.0 / (1.0 + math.exp(-λ * (t - centre) / τ_mono))
+    def hyperG(t):    # hyper‑Gaussian
+        T0 = 2*τ_mono
+        return math.exp(-((t-centre)/T0)**6)
+    def d_hyperG(t):
+        T0 = 2*τ_mono
+        return hyperG(t) * (-6) * ((t - centre)/T0)**5 / T0
+    a0 = hyperG(t_start)
+    def envelope(t):
+        return (hyperG(t) - a0) / (1 - a0) * math.cos(math.pi/2 * mono(t))
+    def d_envelope(t):
+        term1 = d_hyperG(t) / (1 - a0)
+        term2 = -(hyperG(t) - a0) / (1 - a0)**2 * d_hyperG(t_start)
+        # product rule with the mono() factor
+        d_mono = (λ / τ_mono) * mono(t) * (1 - mono(t))
+        return (term1 + term2) * np.cos(np.pi/2 * mono(t)) \
+            + (hyperG(t) - a0)/(1 - a0) * (-np.pi/2) * np.sin(np.pi/2*mono(t)) * d_mono
+    env = envelope(t)
+    d_env = d_envelope(t)
+    return 2*math.pi* ( amp * env - 1j* amp_correction * d_env ) * math.cos(2*math.pi*w_d*t - phi)
+
+def Hyper_Gaussian_DRAG_STIRAP_pump_ij(t, args, math=np):
+    # stoke is the first pulse
+    w_d   = args['w_d']
+    amp   = args['amp']
+    amp_correction = args['amp_correction']
+    t_stop = args['t_stop']
+    t_start = args.get('t_start', 0.0)
+    phi   = args.get('phi', 0.0)
+    dt = 1e-12
+    # --- helpers reused from your code -----------------------------
+    λ         = 4.0
+    τ_mono    = (t_stop - t_start) / 6.0
+    centre    = (t_stop + t_start) / 2.0 + t_start
+    def mono(t):
+        return 1.0 / (1.0 + math.exp(-λ * (t - centre) / τ_mono))
+    def hyperG(t):
+        T0 = 2.0 * τ_mono
+        return math.exp(-((t - centre) / T0) ** 6)
+    def d_hyperG(t):
+        T0 = 2.0 * τ_mono
+        return hyperG(t) * (-6.0) * ((t - centre) / T0) ** 5 / T0
+    a0 = hyperG(t_start)
+    # pump uses  sin(π mono/2)
+    def envelope(t):
+        return (hyperG(t) - a0) / (1.0 - a0) * math.sin(math.pi / 2.0 * mono(t))
+    def d_envelope(t):
+        term1 = d_hyperG(t) / (1.0 - a0)
+        term2 = -(hyperG(t) - a0) / (1.0 - a0) ** 2 * d_hyperG(t_start)
+        d_mono = (λ / τ_mono) * mono(t) * (1.0 - mono(t))
+        return (
+            (term1 + term2) * math.sin(math.pi / 2.0 * mono(t))
+            + (hyperG(t) - a0)
+              / (1.0 - a0)
+              * (math.pi / 2.0)
+              * math.cos(math.pi / 2.0 * mono(t))
+              * d_mono
+        )
+    env   = envelope(t)
+    d_env = d_envelope(t)
+    # ----------- full complex coefficient ----------------------------------------
+    coeff = 2.0 * math.pi * (amp * env - 1j * amp_correction * d_env)
+    # return coefficient multiplied by carrier (σₓ term)
+    return coeff * math.cos(2.0 * math.pi * w_d * t - phi)
