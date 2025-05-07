@@ -23,14 +23,14 @@ setup(
         "scqubits==4.0.0",
         "loky",
         "bidict",
-        "dynamiqs",
         "nevergrad",
         "rich"
     ],
     extras_require={
         'dev': ['pytest'],
         'jax': [
-            "jax[cuda12]"
+            "jax[cuda12]",
+            "dynamiqs",
         ]
     },
     classifiers=[
