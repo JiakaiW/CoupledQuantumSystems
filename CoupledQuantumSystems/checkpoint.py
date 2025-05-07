@@ -6,14 +6,22 @@ allowing for resumable long-running simulations. It's meant for simulation on GP
 
 import pickle
 import qutip
-import dynamiqs as dq
-from dynamiqs.time_qarray import CallableTimeQArray
-import jax.numpy as jnp
 import numpy as np
 import os
 import inspect
 import sys
 from CoupledQuantumSystems.drive import DriveTerm
+
+try:
+    import dynamiqs as dq
+    from dynamiqs.time_qarray import CallableTimeQArray
+    import jax.numpy as jnp
+    JAX_AVAILABLE = True
+except ImportError:
+    JAX_AVAILABLE = False
+    dq = None
+    CallableTimeQArray = None
+    jnp = None
 
 class Checkpoint:
     """Stores the state of a quantum system evolution.
@@ -31,6 +39,8 @@ class Checkpoint:
 
     def __init__(self):
         """Initialize an empty checkpoint."""
+        if not JAX_AVAILABLE:
+            raise ImportError("JAX and dynamiqs are required for checkpoint functionality. Please install them using 'pip install CoupledQuantumSystems[jax]'")
         self.next_t_idx = 0
         self.qt_result = qutip.solver.Result()
 

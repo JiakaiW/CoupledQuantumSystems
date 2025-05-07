@@ -8,7 +8,11 @@
 from dataclasses import dataclass, field
 from typing import  Callable, Dict
 import numpy as np
-import jax.numpy as jnp
+try:
+    import jax.numpy as jnp
+    JAX_AVAILABLE = True
+except ImportError:
+    JAX_AVAILABLE = False
 import qutip
 
 class MathBackend:
@@ -66,6 +70,8 @@ class DriveTerm:
 
     def jax_wrapper(self) -> Callable:
         """Returns a function compatible with JAX (math=jnp)."""
+        if not JAX_AVAILABLE:
+            raise ImportError("JAX is not installed. Please install it using 'pip install CoupledQuantumSystems[jax]'")
         def jax_pulse_shape_func(t, args):
             return self.pulse_shape_func_with_id(t, args, math=jnp)
         return jax_pulse_shape_func
@@ -256,7 +262,7 @@ def sin_squared_recursive_DRAG(t, args=None, math=np):
     )
 
     # 2nd derivative:  (2π/T)² · (cos(2πτ) – 1)
-    #  (the “–1” keeps the derivative continuous at the edges)
+    #  (the "–1" keeps the derivative continuous at the edges)
     envelope_d2 = math.where(
         inside,
         2.0 * (pi_over_T ** 2) *
