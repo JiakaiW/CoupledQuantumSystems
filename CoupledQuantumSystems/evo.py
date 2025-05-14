@@ -3,7 +3,7 @@ import numpy as np
 import qutip
 from typing import List, Union
 from tqdm import tqdm
-
+from CoupledQuantumSystems.frame import RotatingFrame, static_rwa
 from CoupledQuantumSystems.qobj_manip import *
 from CoupledQuantumSystems.drive import *
 
@@ -59,15 +59,14 @@ def ODEsolve_and_post_process(
         a list of c_ops
     '''
     if apply_rwa:
-        drive_terms_RWA = rotating_wave_approximation(
-            frame_op       = static_hamiltonian,
-            drive_terms    = drive_terms,
-            cutoff_freq    = cutoff_freq,
-        )
+        frame       = RotatingFrame.from_operator(static_hamiltonian)
+        new_static  = static_rwa(frame, static_hamiltonian, cutoff_freq)
+        drive_terms_RWA = rotating_wave_approximation(frame, drive_terms, cutoff_freq)
 
-        H_with_drives =  [static_hamiltonian] + \
-            [[drive_term.driven_op, drive_term.pulse_shape_func_with_id] for drive_term in drive_terms_RWA]
-        
+        H_with_drives = [new_static] + [
+            [dt.driven_op, dt.pulse_shape_func_with_id] for dt in drive_terms_RWA
+        ]
+
         additional_args = {}
         for drive_term in drive_terms_RWA:
             for key in drive_term.pulse_shape_args_with_id:
