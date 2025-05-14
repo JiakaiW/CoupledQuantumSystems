@@ -3,7 +3,7 @@ import numpy as np
 import qutip
 from typing import List, Union
 from tqdm import tqdm
-from CoupledQuantumSystems.frame import RotatingFrame, static_rwa
+from CoupledQuantumSystems.frame import RotatingFrame
 from CoupledQuantumSystems.qobj_manip import *
 from CoupledQuantumSystems.drive import *
 

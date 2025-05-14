@@ -20,7 +20,8 @@ from CoupledQuantumSystems.qobj_manip import generate_single_mapping,truncate_cu
 from CoupledQuantumSystems.drive import DriveTerm
 from CoupledQuantumSystems.evo import ODEsolve_and_post_process
 from CoupledQuantumSystems.qobj_manip import get_product, get_product_vectorized
-from CoupledQuantumSystems.frame import RotatingFrame, static_rwa, rotating_wave_approximation
+from CoupledQuantumSystems.frame import RotatingFrame
+
 class QuantumSystem:
     """Base class for quantum systems providing common simulation functionality.
 
@@ -46,10 +47,10 @@ class QuantumSystem:
                                                        List[List[DriveTerm]]],
                                     c_ops: Union[None,
                                                  List[qutip.Qobj],
-                                                 List[List[qutip.Qobj]]],
+                                                 List[List[qutip.Qobj]]]=[],
                                     e_ops: Union[None,
                                                  List[qutip.Qobj],
-                                                 List[List[qutip.Qobj]]],
+                                                 List[List[qutip.Qobj]]]=[],
                                     post_processing_funcs=[],
                                     post_processing_args=[],
                                     show_each_thread_progress=False,
@@ -136,11 +137,11 @@ class QuantumSystem:
             num_hamiltonian_drive_terms = 1
         else:
             num_hamiltonian_drive_terms = len(drive_terms)
-        if c_ops is None or isinstance(c_ops[0], qutip.Qobj): # The order matters. Otherwise 'NoneType' object is not subscriptable
+        if c_ops is None or len(c_ops)==0 or isinstance(c_ops[0], qutip.Qobj): # The order matters. Otherwise 'NoneType' object is not subscriptable
             num_hamiltonian_c_ops = 1
         else:
             num_hamiltonian_c_ops = len(c_ops)
-        if e_ops is None or isinstance(e_ops[0], qutip.Qobj):
+        if e_ops is None or len(e_ops)==0 or isinstance(e_ops[0], qutip.Qobj):
             num_hamiltonian_e_ops = 1
         else:
             num_hamiltonian_e_ops = len(e_ops)
@@ -178,18 +179,46 @@ class QuantumSystem:
             assert len(drive_terms) == len(c_ops) == len(e_ops) == num_hamiltonian
 
         static_hamiltonian = self.diag_hamiltonian
-        if rwa_frame == True:
-            frame       = RotatingFrame.from_operator(self.diag_hamiltonian,cutoff_freq)
+        if rwa_frame == True: # TODO: this is a bug. it doesn't handle 2d list of rwa_frame
+            rwa_frame       = RotatingFrame.from_operator(self.diag_hamiltonian,cutoff_freq)
             static_hamiltonian  = rwa_frame.static_rwa(self.diag_hamiltonian)
-            drive_terms = rwa_frame.rwa_transform_drive_terms( drive_terms)
-            e_ops = [rwa_frame.to_frame_basis(e_op) for e_op in e_ops]
-            c_ops = [rwa_frame.to_frame_basis(c_op) for c_op in c_ops]
+            # Handle 1D vs 2D lists for drive_terms
+            if isinstance(drive_terms[0], DriveTerm):
+                drive_terms = rwa_frame.rwa_transform_drive_terms(drive_terms)
+            else:
+                drive_terms = [rwa_frame.rwa_transform_drive_terms(drive_term_list) for drive_term_list in drive_terms]
+            # Handle 1D vs 2D lists for e_ops
+            if e_ops is not None and len(e_ops) > 0:  # Check if e_ops exists and is not empty
+                if isinstance(e_ops[0], qutip.Qobj):
+                    e_ops = [rwa_frame.to_frame_basis(e_op) for e_op in e_ops]
+                else:
+                    e_ops = [[rwa_frame.to_frame_basis(e_op) for e_op in e_op_list] for e_op_list in e_ops]
+            # Handle 1D vs 2D lists for c_ops
+            if c_ops is not None and len(c_ops) > 0:  # Check if c_ops exists and is not empty
+                if isinstance(c_ops[0], qutip.Qobj):
+                    c_ops = [rwa_frame.to_frame_basis(c_op) for c_op in c_ops]
+                else:
+                    c_ops = [[rwa_frame.to_frame_basis(c_op) for c_op in c_op_list] for c_op_list in c_ops]
         elif isinstance(rwa_frame, RotatingFrame):
             static_hamiltonian  = rwa_frame.static_rwa(self.diag_hamiltonian)
-            drive_terms = rwa_frame.rwa_transform_drive_terms( drive_terms)
-            e_ops = [rwa_frame.to_frame_basis(e_op) for e_op in e_ops]
-            c_ops = [rwa_frame.to_frame_basis(c_op) for c_op in c_ops]
-        elif rwa_frame != False or rwa_frame is not None:
+            # Handle 1D vs 2D lists for drive_terms
+            if isinstance(drive_terms[0], DriveTerm):
+                drive_terms = rwa_frame.rwa_transform_drive_terms(drive_terms)
+            else:
+                drive_terms = [rwa_frame.rwa_transform_drive_terms(drive_term_list) for drive_term_list in drive_terms]
+            # Handle 1D vs 2D lists for e_ops
+            if e_ops is not None and len(e_ops) > 0:  # Check if e_ops exists and is not empty
+                if isinstance(e_ops[0], qutip.Qobj):
+                    e_ops = [rwa_frame.to_frame_basis(e_op) for e_op in e_ops]
+                else:
+                    e_ops = [[rwa_frame.to_frame_basis(e_op) for e_op in e_op_list] for e_op_list in e_ops]
+            # Handle 1D vs 2D lists for c_ops
+            if c_ops is not None and len(c_ops) > 0:  # Check if c_ops exists and is not empty
+                if isinstance(c_ops[0], qutip.Qobj):
+                    c_ops = [rwa_frame.to_frame_basis(c_op) for c_op in c_ops]
+                else:
+                    c_ops = [[rwa_frame.to_frame_basis(c_op) for c_op in c_op_list] for c_op_list in c_ops]
+        elif rwa_frame != False and rwa_frame is not None:
             raise ValueError("rwa_frame must be True, False, or a RotatingFrame object")
         
         with get_reusable_executor(max_workers=None, context='loky') as executor:
@@ -465,9 +494,8 @@ class CoupledSystem(QuantumSystem):
                                     show_each_thread_progress = True, 
                                     show_multithread_progress = False,
                                     store_states = True,
-                                    apply_rwa=False,
+                                    rwa_frame=None,
                                     cutoff_freq=1.0,
-
                                     ):
         post_processing_funcs = []
         post_processing_args = []
@@ -494,7 +522,7 @@ class CoupledSystem(QuantumSystem):
                                                    show_each_thread_progress=show_each_thread_progress, 
                                                    show_multithread_progress=show_multithread_progress,
                                                    store_states=store_states,
-                                                   apply_rwa=apply_rwa,
+                                                   rwa_frame=rwa_frame,
                                                    cutoff_freq=cutoff_freq)
 
 class QubitResonatorSystem(CoupledSystem):
