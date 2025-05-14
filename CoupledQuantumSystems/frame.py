@@ -67,7 +67,7 @@ class RotatingFrame:
         def _is_zero(M: qutip.Qobj): return M.data.nnz == 0
 
         for term in drive_terms:
-            ω_d = term.pulse_shape_args['w_d']          # Hz
+            ω_d = term.pulse_shape_args['w_d']          # GHz
             φ   = term.pulse_shape_args.get('phi', 0.0)
             Gf  = self.to_frame_basis(term.driven_op).full()
 
@@ -86,7 +86,7 @@ class RotatingFrame:
                     DriveTerm(
                         driven_op       = self.from_frame_basis(G_c).tidyup(1e-14),
                         pulse_shape_func= term.pulse_shape_func,
-                        pulse_shape_args={**term.pulse_shape_args},
+                        pulse_shape_args={**term.pulse_shape_args,'w_d':0.0},
                         pulse_id        =(term.pulse_id or "")+"_rwa"
                     )
                 )
@@ -95,7 +95,7 @@ class RotatingFrame:
                     DriveTerm(
                         driven_op       = self.from_frame_basis(G_s).tidyup(1e-14),
                         pulse_shape_func= term.pulse_shape_func,
-                        pulse_shape_args={**term.pulse_shape_args,'phi':φ-np.pi/2},
+                        pulse_shape_args={**term.pulse_shape_args,'phi':φ-np.pi/2,'w_d':0.0},
                         pulse_id        =(term.pulse_id or "")+"_rwa_q"
                     )
                 )
