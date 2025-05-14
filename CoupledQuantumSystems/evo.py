@@ -42,9 +42,6 @@ def ODEsolve_and_post_process(
             post_processing_funcs:List=[],
             post_processing_args:List=[],
 
-            apply_rwa: bool = False,
-            cutoff_freq: float = 1.0,
-
             print_progress:bool = True,
             file_name: str = None,
             mcsolve_ntraj:int = 500,
@@ -58,33 +55,16 @@ def ODEsolve_and_post_process(
             then assemble the two into an H_with_drive
         a list of c_ops
     '''
-    if apply_rwa:
-        frame       = RotatingFrame.from_operator(static_hamiltonian)
-        new_static  = static_rwa(frame, static_hamiltonian, cutoff_freq)
-        drive_terms_RWA = rotating_wave_approximation(frame, drive_terms, cutoff_freq)
+    H_with_drives =  [static_hamiltonian] + \
+        [[drive_term.driven_op, drive_term.pulse_shape_func_with_id] for drive_term in drive_terms]
 
-        H_with_drives = [new_static] + [
-            [dt.driven_op, dt.pulse_shape_func_with_id] for dt in drive_terms_RWA
-        ]
-
-        additional_args = {}
-        for drive_term in drive_terms_RWA:
-            for key in drive_term.pulse_shape_args_with_id:
-                if key in additional_args:
-                    raise ValueError(f"Duplicate key found: {key}")
-                else:
-                    additional_args[key] = drive_term.pulse_shape_args_with_id[key]
-    else:
-        H_with_drives =  [static_hamiltonian] + \
-            [[drive_term.driven_op, drive_term.pulse_shape_func_with_id] for drive_term in drive_terms]
-    
-        additional_args = {}
-        for drive_term in drive_terms:
-            for key in drive_term.pulse_shape_args_with_id:
-                if key in additional_args:
-                    raise ValueError(f"Duplicate key found: {key}")
-                else:
-                    additional_args[key] = drive_term.pulse_shape_args_with_id[key]
+    additional_args = {}
+    for drive_term in drive_terms:
+        for key in drive_term.pulse_shape_args_with_id:
+            if key in additional_args:
+                raise ValueError(f"Duplicate key found: {key}")
+            else:
+                additional_args[key] = drive_term.pulse_shape_args_with_id[key]
 
     if method == 'qutip.mesolve':
         result = qutip.mesolve(

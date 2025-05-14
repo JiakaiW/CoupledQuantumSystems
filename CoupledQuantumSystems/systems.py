@@ -20,7 +20,7 @@ from CoupledQuantumSystems.qobj_manip import generate_single_mapping,truncate_cu
 from CoupledQuantumSystems.drive import DriveTerm
 from CoupledQuantumSystems.evo import ODEsolve_and_post_process
 from CoupledQuantumSystems.qobj_manip import get_product, get_product_vectorized
-
+from CoupledQuantumSystems.frame import RotatingFrame, static_rwa, rotating_wave_approximation
 class QuantumSystem:
     """Base class for quantum systems providing common simulation functionality.
 
@@ -55,8 +55,8 @@ class QuantumSystem:
                                     show_each_thread_progress=False,
                                     show_multithread_progress=False,
                                     store_states=True,
-                                    apply_rwa=False,
-                                    cutoff_freq=1.0,
+                                    rwa_frame: Union[bool, RotatingFrame] = False,
+                                    cutoff_freq: float = 40,
                                     ) -> Union[List[Any],
                                                 List[List[Any]]]:
         """
@@ -177,6 +177,21 @@ class QuantumSystem:
 
             assert len(drive_terms) == len(c_ops) == len(e_ops) == num_hamiltonian
 
+        static_hamiltonian = self.diag_hamiltonian
+        if rwa_frame == True:
+            frame       = RotatingFrame.from_operator(self.diag_hamiltonian,cutoff_freq)
+            static_hamiltonian  = rwa_frame.static_rwa(self.diag_hamiltonian)
+            drive_terms = rwa_frame.rwa_transform_drive_terms( drive_terms)
+            e_ops = [rwa_frame.to_frame_basis(e_op) for e_op in e_ops]
+            c_ops = [rwa_frame.to_frame_basis(c_op) for c_op in c_ops]
+        elif isinstance(rwa_frame, RotatingFrame):
+            static_hamiltonian  = rwa_frame.static_rwa(self.diag_hamiltonian)
+            drive_terms = rwa_frame.rwa_transform_drive_terms( drive_terms)
+            e_ops = [rwa_frame.to_frame_basis(e_op) for e_op in e_ops]
+            c_ops = [rwa_frame.to_frame_basis(c_op) for c_op in c_ops]
+        elif rwa_frame != False or rwa_frame is not None:
+            raise ValueError("rwa_frame must be True, False, or a RotatingFrame object")
+        
         with get_reusable_executor(max_workers=None, context='loky') as executor:
             # Initialize results matrix
             results = [[None for _ in range(num_init_states)] for _ in range(num_hamiltonian)]
@@ -189,16 +204,14 @@ class QuantumSystem:
                         ODEsolve_and_post_process,
                         y0=initial_states[j],
                         tlist=tlist[i],
-                        static_hamiltonian=self.diag_hamiltonian,
+                        static_hamiltonian=static_hamiltonian,
                         drive_terms=drive_terms[i],
                         c_ops=c_ops[i],
                         e_ops=e_ops[i],
                         post_processing_funcs=post_processing_funcs,
                         post_processing_args=post_processing_args,
                         print_progress=show_each_thread_progress,
-                        store_states = store_states,
-                        apply_rwa = apply_rwa,
-                        cutoff_freq = cutoff_freq,
+                        store_states = store_states
                     )
                     futures[future] = (i, j)  # store both indices
 
