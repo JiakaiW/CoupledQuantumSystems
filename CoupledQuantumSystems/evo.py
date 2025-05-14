@@ -67,17 +67,25 @@ def ODEsolve_and_post_process(
 
         H_with_drives =  [static_hamiltonian] + \
             [[drive_term.driven_op, drive_term.pulse_shape_func_with_id] for drive_term in drive_terms_RWA]
+        
+        additional_args = {}
+        for drive_term in drive_terms_RWA:
+            for key in drive_term.pulse_shape_args_with_id:
+                if key in additional_args:
+                    raise ValueError(f"Duplicate key found: {key}")
+                else:
+                    additional_args[key] = drive_term.pulse_shape_args_with_id[key]
     else:
         H_with_drives =  [static_hamiltonian] + \
             [[drive_term.driven_op, drive_term.pulse_shape_func_with_id] for drive_term in drive_terms]
     
-    additional_args = {}
-    for drive_term in drive_terms:
-        for key in drive_term.pulse_shape_args_with_id:
-            if key in additional_args:
-                raise ValueError(f"Duplicate key found: {key}")
-            else:
-                additional_args[key] = drive_term.pulse_shape_args_with_id[key]
+        additional_args = {}
+        for drive_term in drive_terms:
+            for key in drive_term.pulse_shape_args_with_id:
+                if key in additional_args:
+                    raise ValueError(f"Duplicate key found: {key}")
+                else:
+                    additional_args[key] = drive_term.pulse_shape_args_with_id[key]
 
     if method == 'qutip.mesolve':
         result = qutip.mesolve(

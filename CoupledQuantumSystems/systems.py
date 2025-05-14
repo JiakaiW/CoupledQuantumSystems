@@ -452,6 +452,9 @@ class CoupledSystem(QuantumSystem):
                                     show_each_thread_progress = True, 
                                     show_multithread_progress = False,
                                     store_states = True,
+                                    apply_rwa=False,
+                                    cutoff_freq=1.0,
+
                                     ):
         post_processing_funcs = []
         post_processing_args = []
@@ -477,7 +480,9 @@ class CoupledSystem(QuantumSystem):
                                                    post_processing_args=post_processing_args, 
                                                    show_each_thread_progress=show_each_thread_progress, 
                                                    show_multithread_progress=show_multithread_progress,
-                                                   store_states=store_states)
+                                                   store_states=store_states,
+                                                   apply_rwa=apply_rwa,
+                                                   cutoff_freq=cutoff_freq)
 
 class QubitResonatorSystem(CoupledSystem):
     """System consisting of a qubit coupled to a resonator.

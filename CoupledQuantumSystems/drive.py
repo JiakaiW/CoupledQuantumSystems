@@ -145,7 +145,7 @@ def rotating_wave_approximation(
                     driven_op       = G_c,
                     pulse_shape_func= term.pulse_shape_func,     # same envelope
                     pulse_shape_args={**term.pulse_shape_args},  # same args
-                    pulse_id        = term.pulse_id + "_rwa"
+                    pulse_id        = (term.pulse_id if term.pulse_id is not None else "") + "_rwa"
                 )
             )
         if not _is_zero(G_s):
@@ -157,7 +157,7 @@ def rotating_wave_approximation(
                     driven_op       = G_s,
                     pulse_shape_func= term.pulse_shape_func,
                     pulse_shape_args=new_args,
-                    pulse_id        = term.pulse_id + "_rwa_phase_shifted"
+                    pulse_id        = (term.pulse_id if term.pulse_id is not None else "") + "_rwa_phase_shifted"
                 )
             )
     return out_terms
