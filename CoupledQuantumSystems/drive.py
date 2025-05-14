@@ -6,7 +6,7 @@
 #
 ############################################################################
 from dataclasses import dataclass, field
-from typing import  Callable, Dict
+from typing import  Callable, Dict, List
 import numpy as np
 try:
     import jax.numpy as jnp
@@ -100,6 +100,67 @@ class DriveTerm:
         ax.plot(tlist, self.pulse_shape_func_with_id(tlist,args),label = self.pulse_id,alpha=alpha,color = color)
         if text:
             ax.text(tlist[int(len(tlist)/3)], 2*np.pi* 0.99* self.pulse_shape_args['amp'],f"{self.pulse_id} freq: {self.pulse_shape_args['w_d']}")
+
+def rotating_wave_approximation(
+        frame_op: qutip.Qobj,           # diagonal, rad/s
+        drive_terms: List[DriveTerm],
+        cutoff_freq: float = 1.0      # GHz
+) -> List[DriveTerm]:
+    """
+    Element‑wise RWA in the spirit of qiskit_dynamics.models.rotating_wave_approximation.
+    Keeps matrix elements whose effective oscillation frequency is
+        | ±w_d  + (E_j-E_k)/2π |  <  cutoff_freq
+    and splits each survivor into cosine & sine pieces to stay Hermitian.
+    """
+    # ---------- pre‑compute the Bohr frequencies ν_{jk} in GHz ----------
+    E = np.diag(frame_op.full())           # rad/ns
+    ν_jk = (E[:, None] - E[None, :]) / (2*np.pi)
+
+    out_terms: List[DriveTerm] = []
+    def _is_zero(qobj):
+        """True if the operator has no non‑zero entries."""
+        return qobj.data.nnz == 0          # nnz = number of stored elements
+    for term in drive_terms:
+        G     = term.driven_op.full()
+        w_d_Hz = term.pulse_shape_args['w_d']   # already in Hz
+        φ      = term.pulse_shape_args.get('phi', 0.0)
+
+        # element‑wise masks for +w_d and –w_d branches
+        keep_pos = (np.abs(+w_d_Hz + ν_jk) < cutoff_freq)
+        keep_neg = (np.abs(-w_d_Hz + ν_jk) < cutoff_freq)
+
+        if not (keep_pos.any() or keep_neg.any()):
+            continue          # the whole operator is too fast → drop
+
+        G_pos = qutip.Qobj(G * keep_pos)
+        G_neg = qutip.Qobj(G * keep_neg)
+
+        # Hermitian split:   G_c cos + G_s sin
+        G_c = 0.5 * (G_pos + G_neg)
+        G_s = 0.5j * (G_pos - G_neg)
+
+        if not _is_zero(G_c):
+            out_terms.append(
+                DriveTerm(
+                    driven_op       = G_c,
+                    pulse_shape_func= term.pulse_shape_func,     # same envelope
+                    pulse_shape_args={**term.pulse_shape_args},  # same args
+                    pulse_id        = term.pulse_id + "_rwa"
+                )
+            )
+        if not _is_zero(G_s):
+            # shift carrier by −π/2 so cos→sin
+            new_args = {**term.pulse_shape_args,
+                        'phi': term.pulse_shape_args.get('phi', 0.0) - np.pi/2}
+            out_terms.append(
+                DriveTerm(
+                    driven_op       = G_s,
+                    pulse_shape_func= term.pulse_shape_func,
+                    pulse_shape_args=new_args,
+                    pulse_id        = term.pulse_id + "_rwa_phase_shifted"
+                )
+            )
+    return out_terms
 
 def square_pulse_with_rise_fall(t,
                                 args = {}, math=np):

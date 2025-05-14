@@ -42,6 +42,9 @@ def ODEsolve_and_post_process(
             post_processing_funcs:List=[],
             post_processing_args:List=[],
 
+            apply_rwa: bool = False,
+            cutoff_freq: float = 1.0,
+
             print_progress:bool = True,
             file_name: str = None,
             mcsolve_ntraj:int = 500,
@@ -55,9 +58,18 @@ def ODEsolve_and_post_process(
             then assemble the two into an H_with_drive
         a list of c_ops
     '''
-    
-    H_with_drives =  [static_hamiltonian] + \
-          [[drive_term.driven_op, drive_term.pulse_shape_func_with_id] for drive_term in drive_terms]
+    if apply_rwa:
+        drive_terms_RWA = rotating_wave_approximation(
+            frame_op       = static_hamiltonian,
+            drive_terms    = drive_terms,
+            cutoff_freq    = cutoff_freq,
+        )
+
+        H_with_drives =  [static_hamiltonian] + \
+            [[drive_term.driven_op, drive_term.pulse_shape_func_with_id] for drive_term in drive_terms_RWA]
+    else:
+        H_with_drives =  [static_hamiltonian] + \
+            [[drive_term.driven_op, drive_term.pulse_shape_func_with_id] for drive_term in drive_terms]
     
     additional_args = {}
     for drive_term in drive_terms:

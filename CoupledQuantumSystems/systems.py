@@ -55,6 +55,8 @@ class QuantumSystem:
                                     show_each_thread_progress=False,
                                     show_multithread_progress=False,
                                     store_states=True,
+                                    apply_rwa=False,
+                                    cutoff_freq=1.0,
                                     ) -> Union[List[Any],
                                                 List[List[Any]]]:
         """
@@ -94,7 +96,8 @@ class QuantumSystem:
                 parallel progress. Defaults to False.
             store_states (bool, optional): Whether to store quantum states during
                 evolution. Defaults to True.
-                
+            apply_rwa (bool, optional): Whether to apply rotating wave approximation. Defaults to False.
+            cutoff_freq (float, optional): Cutoff frequency for rotating wave approximation. Defaults to 1.0 GHz.
         Returns:
             Union[List[Any], List[List[Any]]]: List of evolution results, possibly
                 post-processed. The structure matches the input structure of
@@ -194,6 +197,8 @@ class QuantumSystem:
                         post_processing_args=post_processing_args,
                         print_progress=show_each_thread_progress,
                         store_states = store_states,
+                        apply_rwa = apply_rwa,
+                        cutoff_freq = cutoff_freq,
                     )
                     futures[future] = (i, j)  # store both indices
 

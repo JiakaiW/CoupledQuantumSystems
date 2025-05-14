@@ -4,15 +4,11 @@ This module provides a specialized implementation of a fluxonium qubit system,
 including methods for calculating transition rates and generating drive terms.
 """
 
-import concurrent
-from loky import get_reusable_executor
 import numpy as np
 import qutip
 import scqubits
-from typing import List, Union,Any
 
 from CoupledQuantumSystems.drive import *
-from CoupledQuantumSystems.evo import ODEsolve_and_post_process
 from CoupledQuantumSystems.noise import *
 from CoupledQuantumSystems.qobj_manip import *
 from CoupledQuantumSystems.systems import QuantumSystem
@@ -374,37 +370,3 @@ class gfIFQ(QuantumSystem):
             )
         ]
         return drive_terms
-    
-def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
-        list_of_systems: List[gfIFQ],
-        list_of_kwargs: list[Any],
-        max_workers = None,
-        store_states = True,
-        post_processing = [],
-    ):
-    assert len(list_of_systems) == len(list_of_kwargs)
-    
-    results = [None] * len(list_of_systems)
-    with get_reusable_executor(max_workers=max_workers, context='loky') as executor:
-        futures = {}
-        for i in range(len(list_of_systems)):
-            post_processing_funcs = []
-            post_processing_args = []
-            future = executor.submit(
-                ODEsolve_and_post_process, 
-                y0=list_of_kwargs[i]['y0'], 
-                tlist=list_of_kwargs[i]['tlist'], 
-                static_hamiltonian=list_of_systems[i].diag_hamiltonian,
-                drive_terms=list_of_kwargs[i].get('drive_terms', None),
-                c_ops=list_of_kwargs[i].get('c_ops', None),
-                e_ops=list_of_kwargs[i].get('e_ops', None),
-                store_states = store_states,
-                post_processing_funcs=post_processing_funcs,
-                post_processing_args=post_processing_args,
-                file_name = None)
-            futures[future] = i
-        
-        for future in concurrent.futures.as_completed(futures):
-            original_index = futures[future]
-            results[original_index] = future.result()
-    return results

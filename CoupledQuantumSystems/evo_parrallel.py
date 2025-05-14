@@ -12,6 +12,8 @@ def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
         max_workers = None,
         store_states = True,
         post_processing = ['pad_back'],
+        apply_rwa = False,
+        cutoff_freq = 1.0,
     ):
     '''
     This function helps run mesolve using the ODEsolve_and_post_process function concurrently
@@ -59,7 +61,10 @@ def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
                 store_states = store_states,
                 post_processing_funcs=post_processing_funcs,
                 post_processing_args=post_processing_args,
-                file_name = f'{i}')
+                file_name = f'{i}',
+                apply_rwa = apply_rwa,
+                cutoff_freq = cutoff_freq,
+                )
             futures[future] = i
         
         for future in concurrent.futures.as_completed(futures):
