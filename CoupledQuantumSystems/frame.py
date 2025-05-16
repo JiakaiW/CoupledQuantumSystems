@@ -27,7 +27,9 @@ class RotatingFrame:
 
         frame_diag, frame_basis = np.linalg.eigh(1j * (-1j)*Hf_array)   # anti‑Hermitian
         frame_diag = -1j * frame_diag
-        frame_basis = qutip.Qobj(frame_basis)
+        # frame_basis = qutip.Qobj(frame_basis)
+        Ucols = np.column_stack([ket.full() for ket in frame_basis])
+        frame_basis = qutip.Qobj(Ucols)
         frame_freqs = (np.broadcast_to(frame_diag, (dim, dim)) - np.broadcast_to(frame_diag, (dim, dim)).T).imag 
         frame_shift = qutip.Qobj(1j*np.diag(frame_diag)) # This is real number
         return cls(frame_diag=frame_diag, frame_basis=frame_basis, frame_freqs=frame_freqs, cutoff_freq=cutoff_freq, dim=dim, frame_shift=frame_shift)
