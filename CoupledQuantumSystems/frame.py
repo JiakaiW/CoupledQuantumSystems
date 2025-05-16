@@ -60,10 +60,12 @@ class RotatingFrame:
         def _is_zero(M: qutip.Qobj): return M.data.nnz == 0
 
         for term in drive_terms: # each term has one operator, for which we output two terms
+            generator = -1j*term.driven_op
+            generator_in_frame_basis = self.into_frame_basis(generator)
+            op  = generator_in_frame_basis.full()
+
             ω_d = term.pulse_shape_args['w_d']          # GHz
             φ   = term.pulse_shape_args.get('phi', 0.0)
-            op  = self.into_frame_basis(term.driven_op).full()
-
             keep_pos = np.abs(+ω_d + self.frame_freqs) < self.cutoff_freq
             keep_neg = np.abs(-ω_d + self.frame_freqs) < self.cutoff_freq
             if not (keep_pos.any() or keep_neg.any()):
@@ -77,7 +79,7 @@ class RotatingFrame:
             if not _is_zero(op_real):
                 out_terms.append(
                     DriveTerm(
-                        driven_op       = self.out_of_frame_basis(op_real),
+                        driven_op       = 1j*self.out_of_frame_basis(op_real),
                         pulse_shape_func= term.pulse_shape_func,
                         pulse_shape_args={**term.pulse_shape_args},
                         pulse_id        =(term.pulse_id or "")+"_rwa"
@@ -86,7 +88,7 @@ class RotatingFrame:
             if not _is_zero(op_imag):
                 out_terms.append(
                     DriveTerm(
-                        driven_op       = self.out_of_frame_basis(op_imag),
+                        driven_op       = 1j*self.out_of_frame_basis(op_imag),
                         pulse_shape_func= term.pulse_shape_func,
                         pulse_shape_args={**term.pulse_shape_args,'phi':φ-np.pi/2},
                         pulse_id        =(term.pulse_id or "")+"_rwa_q"
