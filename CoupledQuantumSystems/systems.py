@@ -187,18 +187,6 @@ class QuantumSystem:
                 drive_terms = rwa_frame.rwa_transform_drive_terms(drive_terms)
             else:
                 drive_terms = [rwa_frame.rwa_transform_drive_terms(drive_term_list) for drive_term_list in drive_terms]
-            # Handle 1D vs 2D lists for e_ops
-            if e_ops is not None and len(e_ops) > 0:  # Check if e_ops exists and is not empty
-                if isinstance(e_ops[0], qutip.Qobj):
-                    e_ops = [rwa_frame.to_frame_basis(e_op) for e_op in e_ops]
-                else:
-                    e_ops = [[rwa_frame.to_frame_basis(e_op) for e_op in e_op_list] for e_op_list in e_ops]
-            # Handle 1D vs 2D lists for c_ops
-            if c_ops is not None and len(c_ops) > 0:  # Check if c_ops exists and is not empty
-                if isinstance(c_ops[0], qutip.Qobj):
-                    c_ops = [rwa_frame.to_frame_basis(c_op) for c_op in c_ops]
-                else:
-                    c_ops = [[rwa_frame.to_frame_basis(c_op) for c_op in c_op_list] for c_op_list in c_ops]
         elif isinstance(rwa_frame, RotatingFrame):
             static_hamiltonian  = rwa_frame.static_rwa(self.diag_hamiltonian)
             # Handle 1D vs 2D lists for drive_terms
@@ -206,18 +194,7 @@ class QuantumSystem:
                 drive_terms = rwa_frame.rwa_transform_drive_terms(drive_terms)
             else:
                 drive_terms = [rwa_frame.rwa_transform_drive_terms(drive_term_list) for drive_term_list in drive_terms]
-            # Handle 1D vs 2D lists for e_ops
-            if e_ops is not None and len(e_ops) > 0:  # Check if e_ops exists and is not empty
-                if isinstance(e_ops[0], qutip.Qobj):
-                    e_ops = [rwa_frame.to_frame_basis(e_op) for e_op in e_ops]
-                else:
-                    e_ops = [[rwa_frame.to_frame_basis(e_op) for e_op in e_op_list] for e_op_list in e_ops]
-            # Handle 1D vs 2D lists for c_ops
-            if c_ops is not None and len(c_ops) > 0:  # Check if c_ops exists and is not empty
-                if isinstance(c_ops[0], qutip.Qobj):
-                    c_ops = [rwa_frame.to_frame_basis(c_op) for c_op in c_ops]
-                else:
-                    c_ops = [[rwa_frame.to_frame_basis(c_op) for c_op in c_op_list] for c_op_list in c_ops]
+
         elif rwa_frame != False and rwa_frame is not None:
             raise ValueError("rwa_frame must be True, False, or a RotatingFrame object")
         
