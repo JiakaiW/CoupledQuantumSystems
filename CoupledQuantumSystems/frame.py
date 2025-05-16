@@ -9,6 +9,8 @@ import numpy as np
 import qutip
 from typing import  Callable, Dict, List
 from CoupledQuantumSystems.drive import DriveTerm
+
+
 @dataclass
 class RotatingFrame:
     frame_diag:   np.ndarray            # eigenvalues (rad/s)
@@ -23,7 +25,7 @@ class RotatingFrame:
         Hf_array = Hf.full()
         dim = Hf_array.shape[0]
 
-        frame_diag, frame_basis = np.linalg.eigh(1j * Hf_array)   # anti‑Hermitian
+        frame_diag, frame_basis = np.linalg.eigh(1j * (-1j)*Hf_array)   # anti‑Hermitian
         frame_diag = -1j * frame_diag
         frame_basis = qutip.Qobj(frame_basis)
         frame_freqs = (np.broadcast_to(frame_diag, (dim, dim)) - np.broadcast_to(frame_diag, (dim, dim)).T).imag / (2*np.pi)
