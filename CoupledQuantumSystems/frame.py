@@ -43,9 +43,56 @@ class RotatingFrame:
 
     # TODO: add logic about transforming dissipators
 
-    def static_rwa(self, static_op: qutip.Qobj):# the input is actually generator
-        generator = 1j*static_op + self.frame_shift # This result should actually be called op instead of generator
-        static_op_rwa = qutip.Qobj(generator.full() *(abs(self.frame_freqs) < self.cutoff_freq).astype(int))
+    def conjugate_and_add(
+            self,
+            t,
+            generator,
+            op_to_add_in_fb= None,
+            generator_in_frame_basis=False,
+            return_in_frame_basis=False
+            ):
+        out = generator
+        # 1. put the generator into frame basis (operator_into_frame_basis)
+        if not generator_in_frame_basis:
+            out = self.into_frame_basis(out)
+        # get frame transformation matrix in diagonal basis
+        # assumption that F is anti-Hermitian implies conjugation of
+        # diagonal gives inversion
+        exp_freq = np.exp(self.frame_diag * t)
+        frame_mat = exp_freq.conj().reshape(self.dim, 1) * exp_freq
+
+        out = out.full() * frame_mat
+
+        if op_to_add_in_fb is not None:
+            out = out + op_to_add_in_fb
+
+        # if output is requested to not be in the frame basis, convert it
+        if not return_in_frame_basis:
+            out = self.out_of_frame_basis(out)
+        return out
+
+    def generator_into_frame(self,
+                            t,
+                            generator,
+                            generator_in_frame_basis=False,
+                            return_in_frame_basis=False):
+        return self.conjugate_and_add(
+                                t=t,
+                                generator=generator,
+                                op_to_add_in_fb= -np.diag(self.frame_diag),
+                                generator_in_frame_basis=generator_in_frame_basis,
+                                return_in_frame_basis=return_in_frame_basis
+                                )
+
+    def static_rwa(self, static_op: qutip.Qobj):# suppose the input is hamiltonian (hermitian)
+        static_generator_in_frame_basis = self.generator_into_frame(
+                t=0,
+                generator=-1j*static_op,
+                return_in_frame_basis=True,
+            )
+
+        static_op = 1j*static_generator_in_frame_basis + self.frame_shift # This result should actually be called op instead of generator
+        static_op_rwa = qutip.Qobj(static_op.full() *(abs(self.frame_freqs) < self.cutoff_freq).astype(int))
         return self.out_of_frame_basis(static_op_rwa)                   # back to lab basis
     
     def rwa_transform_drive_terms(
