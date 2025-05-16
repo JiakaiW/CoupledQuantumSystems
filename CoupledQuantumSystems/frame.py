@@ -28,8 +28,8 @@ class RotatingFrame:
         frame_diag, frame_basis = np.linalg.eigh(1j * (-1j)*Hf_array)   # anti‑Hermitian
         frame_diag = -1j * frame_diag
         frame_basis = qutip.Qobj(frame_basis)
-        frame_freqs = (np.broadcast_to(frame_diag, (dim, dim)) - np.broadcast_to(frame_diag, (dim, dim)).T).imag / (2*np.pi)
-        frame_shift = qutip.Qobj(1j*np.diag(frame_diag))
+        frame_freqs = (np.broadcast_to(frame_diag, (dim, dim)) - np.broadcast_to(frame_diag, (dim, dim)).T).imag 
+        frame_shift = qutip.Qobj(1j*np.diag(frame_diag)) # This is real number
         return cls(frame_diag=frame_diag, frame_basis=frame_basis, frame_freqs=frame_freqs, cutoff_freq=cutoff_freq, dim=dim, frame_shift=frame_shift)
 
     # ---------- basis transforms ----------
@@ -39,9 +39,10 @@ class RotatingFrame:
     def out_of_frame_basis(self, op: qutip.Qobj) -> qutip.Qobj:
         return self.frame_basis * op * self.frame_basis.dag()
 
+    # TODO: add logic about transforming dissipators
 
-    def static_rwa(self, static_op: qutip.Qobj):
-        generator = 1j*static_op + self.frame_shift
+    def static_rwa(self, static_op: qutip.Qobj):# the input is actually generator
+        generator = 1j*static_op + self.frame_shift # This result should actually be called op instead of generator
         static_op_rwa = qutip.Qobj(generator.full() *(abs(self.frame_freqs) < self.cutoff_freq).astype(int))
         return self.out_of_frame_basis(static_op_rwa)                   # back to lab basis
     
