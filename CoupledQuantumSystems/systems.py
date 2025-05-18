@@ -46,6 +46,10 @@ class QuantumSystem:
                                     show_each_thread_progress=False,
                                     show_multithread_progress=False,
                                     store_states=True,
+                                    method:str = 'qutip.mesolve',
+                                    rotating_frame: Union[bool, qutip.Qobj] = False,
+                                    rwa_cutoff_freq: float = None,
+                                    rwa_carrier_freq: List[float] = None,
                                     ) -> Union[List[Any],
                                                 List[List[Any]]]:
         """
@@ -186,7 +190,11 @@ class QuantumSystem:
                         post_processing_funcs=post_processing_funcs,
                         post_processing_args=post_processing_args,
                         print_progress=show_each_thread_progress,
-                        store_states = store_states
+                        store_states = store_states,
+                        method = method,
+                        rotating_frame=rotating_frame,
+                        rwa_cutoff_freq=rwa_cutoff_freq,
+                        rwa_carrier_freq=rwa_carrier_freq
                     )
                     futures[future] = (i, j)  # store both indices
 
@@ -427,19 +435,8 @@ class CoupledSystem(QuantumSystem):
         return product_states
 
     def run_qutip_mesolve_parrallel(self,
-                                    initial_states: qutip.Qobj,  # truncated initial states
-                                    tlist: np.array,
-                                    drive_terms: Union[List[DriveTerm],
-                                                       List[List[DriveTerm]]],
-                                    c_ops: Union[None,
-                                                 List[qutip.Qobj]] = None,
-                                    e_ops: Union[None,
-                                                 List[qutip.Qobj]] = None,
-
-                                    post_processing=['pad_back'],
-                                    show_each_thread_progress = True, 
-                                    show_multithread_progress = False,
-                                    store_states = True,
+                                    post_processing=[],
+                                    **kwargs
                                     ):
         post_processing_funcs = []
         post_processing_args = []
@@ -456,16 +453,10 @@ class CoupledSystem(QuantumSystem):
                                         self.sign_multiplier,
                                         None
                                         ))
-        return super().run_qutip_mesolve_parrallel(initial_states=initial_states, 
-                                                   tlist=tlist, 
-                                                   drive_terms=drive_terms, 
-                                                   c_ops=c_ops, 
-                                                   e_ops=e_ops, 
+        return super().run_qutip_mesolve_parrallel(
                                                    post_processing_funcs=post_processing_funcs, 
                                                    post_processing_args=post_processing_args, 
-                                                   show_each_thread_progress=show_each_thread_progress, 
-                                                   show_multithread_progress=show_multithread_progress,
-                                                   store_states=store_states)
+                                                   **kwargs)
 
 class QubitResonatorSystem(CoupledSystem):
     """System consisting of a qubit coupled to a resonator.
