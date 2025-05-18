@@ -1,3 +1,5 @@
+# This was used to construct objects for the dynamiqs backend. Now I use the objects in systems.py to construct the objects
+
 
 # import jax.numpy as jnp
 # from flax import struct

@@ -360,13 +360,14 @@ class gfIFQ(QuantumSystem):
             DriveTerm(
                 driven_op=qutip.Qobj(
                     self.fluxonium.n_operator(energy_esys=True)),
-                pulse_shape_func=square_pulse_with_rise_fall,
+                pulse_shape_func=square_pulse_with_rise_fall_envelope,
                 pulse_id='pi',
                 pulse_shape_args={
-                    'w_d': self.evals[j]-self.evals[i],  # Without 2pi
                     'amp': amp,  # Without 2pi
                     't_square': t_square,
                 },
+                modulation_freq=self.evals[j]-self.evals[i],  # Without 2pi
+                phi=0.0
             )
         ]
         return drive_terms

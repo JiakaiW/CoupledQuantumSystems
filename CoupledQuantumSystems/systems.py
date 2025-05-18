@@ -20,7 +20,6 @@ from CoupledQuantumSystems.qobj_manip import generate_single_mapping,truncate_cu
 from CoupledQuantumSystems.drive import DriveTerm
 from CoupledQuantumSystems.evo import ODEsolve_and_post_process
 from CoupledQuantumSystems.qobj_manip import get_product, get_product_vectorized
-from CoupledQuantumSystems.frame import RotatingFrame
 
 class QuantumSystem:
     """Base class for quantum systems providing common simulation functionality.
@@ -56,8 +55,6 @@ class QuantumSystem:
                                     show_each_thread_progress=False,
                                     show_multithread_progress=False,
                                     store_states=True,
-                                    rwa_frame: Union[bool, RotatingFrame] = False,
-                                    cutoff_freq: float = 40,
                                     ) -> Union[List[Any],
                                                 List[List[Any]]]:
         """
@@ -97,8 +94,7 @@ class QuantumSystem:
                 parallel progress. Defaults to False.
             store_states (bool, optional): Whether to store quantum states during
                 evolution. Defaults to True.
-            apply_rwa (bool, optional): Whether to apply rotating wave approximation. Defaults to False.
-            cutoff_freq (float, optional): Cutoff frequency for rotating wave approximation. Defaults to 1.0 GHz.
+
         Returns:
             Union[List[Any], List[List[Any]]]: List of evolution results, possibly
                 post-processed. The structure matches the input structure of
@@ -179,24 +175,6 @@ class QuantumSystem:
             assert len(drive_terms) == len(c_ops) == len(e_ops) == num_hamiltonian
 
         static_hamiltonian = self.diag_hamiltonian
-        if rwa_frame == True: # TODO: this is a bug. it doesn't handle 2d list of rwa_frame
-            rwa_frame       = RotatingFrame.from_operator(self.diag_hamiltonian,cutoff_freq)
-            static_hamiltonian  = rwa_frame.static_rwa(self.diag_hamiltonian)
-            # Handle 1D vs 2D lists for drive_terms
-            if isinstance(drive_terms[0], DriveTerm):
-                drive_terms = rwa_frame.rwa_transform_drive_terms(drive_terms)
-            else:
-                drive_terms = [rwa_frame.rwa_transform_drive_terms(drive_term_list) for drive_term_list in drive_terms]
-        elif isinstance(rwa_frame, RotatingFrame):
-            static_hamiltonian  = rwa_frame.static_rwa(self.diag_hamiltonian)
-            # Handle 1D vs 2D lists for drive_terms
-            if isinstance(drive_terms[0], DriveTerm):
-                drive_terms = rwa_frame.rwa_transform_drive_terms(drive_terms)
-            else:
-                drive_terms = [rwa_frame.rwa_transform_drive_terms(drive_term_list) for drive_term_list in drive_terms]
-
-        elif rwa_frame != False and rwa_frame is not None:
-            raise ValueError("rwa_frame must be True, False, or a RotatingFrame object")
         
         with get_reusable_executor(max_workers=None, context='loky') as executor:
             # Initialize results matrix
@@ -471,8 +449,6 @@ class CoupledSystem(QuantumSystem):
                                     show_each_thread_progress = True, 
                                     show_multithread_progress = False,
                                     store_states = True,
-                                    rwa_frame=None,
-                                    cutoff_freq=1.0,
                                     ):
         post_processing_funcs = []
         post_processing_args = []
@@ -498,9 +474,7 @@ class CoupledSystem(QuantumSystem):
                                                    post_processing_args=post_processing_args, 
                                                    show_each_thread_progress=show_each_thread_progress, 
                                                    show_multithread_progress=show_multithread_progress,
-                                                   store_states=store_states,
-                                                   rwa_frame=rwa_frame,
-                                                   cutoff_freq=cutoff_freq)
+                                                   store_states=store_states)
 
 class QubitResonatorSystem(CoupledSystem):
     """System consisting of a qubit coupled to a resonator.
