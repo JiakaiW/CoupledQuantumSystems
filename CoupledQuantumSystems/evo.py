@@ -20,15 +20,15 @@ def ODEsolve_and_post_process(
 
             rotating_frame: Union[bool, qutip.Qobj] = False,
             rwa_cutoff_freq: float = None,
-            rwa_carrier_freq: List[float] = None,
+            rwa_carrier_freqs: List[float] = None,
 
 
             print_progress:bool = True,
             file_name: str = None,
             mcsolve_ntraj:int = 500,
             ):
-    if (rotating_frame != False or rwa_cutoff_freq != None or rwa_carrier_freq != None) and method != 'qiskit_dynamics':
-        raise ValueError("rotating_frame, rwa_cutoff_freq, and rwa_carrier_freq are only supported for qiskit_dynamics")
+    if (rotating_frame != False or rwa_cutoff_freq != None or rwa_carrier_freqs != None) and method != 'qiskit_dynamics':
+        raise ValueError("rotating_frame, rwa_cutoff_freq, and rwa_carrier_freqs are only supported for qiskit_dynamics")
     
     if method in ['qutip.mesolve', 'qutip.mcsolve']:
         H_with_drives =  [static_hamiltonian] + \
@@ -72,7 +72,7 @@ def ODEsolve_and_post_process(
             static_dissipators= [op.full() for op in c_ops] if  c_ops is not None else None,
             rotating_frame=rotating_frame,
             rwa_cutoff_freq=rwa_cutoff_freq,
-            rwa_carrier_freq=rwa_carrier_freq
+            rwa_carrier_freqs=rwa_carrier_freqs
         )
         results_qiskit_dynamics = qiskit_solver.solve(t_span=[tlist[0], tlist[-1]],
                                                       t_eval = tlist, 

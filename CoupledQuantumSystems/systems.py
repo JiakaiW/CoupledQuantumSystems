@@ -41,15 +41,9 @@ class QuantumSystem:
                                     e_ops: Union[None,
                                                  List[qutip.Qobj],
                                                  List[List[qutip.Qobj]]]=[],
-                                    post_processing_funcs=[],
-                                    post_processing_args=[],
                                     show_each_thread_progress=False,
                                     show_multithread_progress=False,
-                                    store_states=True,
-                                    method:str = 'qutip.mesolve',
-                                    rotating_frame: Union[bool, qutip.Qobj] = False,
-                                    rwa_cutoff_freq: float = None,
-                                    rwa_carrier_freq: List[float] = None,
+                                    **kwargs
                                     ) -> Union[List[Any],
                                                 List[List[Any]]]:
         """
@@ -67,29 +61,6 @@ class QuantumSystem:
         else:
             return a 2d list of results, each containing num_init_states evolution results 
             
-        Args:
-            initial_states (Union[qutip.Qobj, np.ndarray[qutip.Qobj]]): Initial
-                quantum states. Can be a single state or an array of states.
-            tlist (Union[np.array, List[np.array]]): Time points for evolution.
-                Can be a single array or a list of arrays.
-            drive_terms (Union[List[DriveTerm], List[List[DriveTerm]]]): Drive
-                terms for the Hamiltonian. Can be a single list or a list of lists.
-            c_ops (Union[None, List[qutip.Qobj], List[List[qutip.Qobj]]]): Collapse
-                operators for the master equation. Can be None, a single list, or
-                a list of lists.
-            e_ops (Union[None, List[qutip.Qobj], List[List[qutip.Qobj]]]): Expectation
-                operators to calculate. Can be None, a single list, or a list of lists.
-            post_processing_funcs (list, optional): List of functions to apply to
-                results after evolution. Defaults to empty list.
-            post_processing_args (list, optional): Arguments for post-processing
-                functions. Defaults to empty list.
-            show_each_thread_progress (bool, optional): Whether to show progress
-                for each parallel thread. Defaults to False.
-            show_multithread_progress (bool, optional): Whether to show overall
-                parallel progress. Defaults to False.
-            store_states (bool, optional): Whether to store quantum states during
-                evolution. Defaults to True.
-
         Returns:
             Union[List[Any], List[List[Any]]]: List of evolution results, possibly
                 post-processed. The structure matches the input structure of
@@ -187,14 +158,8 @@ class QuantumSystem:
                         drive_terms=drive_terms[i],
                         c_ops=c_ops[i],
                         e_ops=e_ops[i],
-                        post_processing_funcs=post_processing_funcs,
-                        post_processing_args=post_processing_args,
                         print_progress=show_each_thread_progress,
-                        store_states = store_states,
-                        method = method,
-                        rotating_frame=rotating_frame,
-                        rwa_cutoff_freq=rwa_cutoff_freq,
-                        rwa_carrier_freq=rwa_carrier_freq
+                        **kwargs
                     )
                     futures[future] = (i, j)  # store both indices
 
