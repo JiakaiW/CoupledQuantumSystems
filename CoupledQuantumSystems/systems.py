@@ -1,25 +1,16 @@
-"""Core quantum system simulation module.
-
-This module provides classes and utilities for simulating coupled quantum systems,
-including qubits, resonators, and their interactions. It supports both QuTiP and
-dynamiqs backends for quantum system evolution.
-"""
-
-import concurrent
-from itertools import product
-import multiprocessing
-from loky import get_reusable_executor
-import numpy as np
-import qutip
-import scqubits
-from typing import List, Union, Tuple, Any
-from functools import partial
 from tqdm import tqdm
-
-from CoupledQuantumSystems.qobj_manip import generate_single_mapping,truncate_custom,pad_back_custom,dressed_to_2_level_dm
+import concurrent
+from loky import get_reusable_executor
+from CoupledQuantumSystems.systems import QuantumSystem
+from CoupledQuantumSystems.qobj_manip import pad_back_custom,dressed_to_2_level_dm
+from qiskit.quantum_info import Operator
+from typing import List, Union, Any
 from CoupledQuantumSystems.drive import DriveTerm
 from CoupledQuantumSystems.evo import ODEsolve_and_post_process
+from CoupledQuantumSystems.qobj_manip import generate_single_mapping,truncate_custom,pad_back_custom,dressed_to_2_level_dm
 from CoupledQuantumSystems.qobj_manip import get_product, get_product_vectorized
+import numpy as np
+import qutip
 
 class QuantumSystem:
     """Base class for quantum systems providing common simulation functionality.
