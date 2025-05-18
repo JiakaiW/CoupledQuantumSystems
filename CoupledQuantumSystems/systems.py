@@ -7,6 +7,10 @@ from CoupledQuantumSystems.evo import ODEsolve_and_post_process
 from CoupledQuantumSystems.qobj_manip import generate_single_mapping,truncate_custom,pad_back_custom,dressed_to_2_level_dm, get_product_vectorized
 import numpy as np
 import qutip
+from itertools import product
+import scqubits
+from functools import partial
+import multiprocessing
 
 class QuantumSystem:
     """Base class for quantum systems providing common simulation functionality.

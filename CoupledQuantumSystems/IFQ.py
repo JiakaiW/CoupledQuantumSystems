@@ -108,29 +108,29 @@ class gfIFQ(QuantumSystem):
             DriveTerm(
                 driven_op=qutip.Qobj(
                     self.fluxonium.n_operator(energy_esys=True)),
-                pulse_shape_func=STIRAP_with_modulation,
+                pulse_shape_func=STIRAP_envelope,
                 pulse_id='stoke',  # Stoke is the first pulse, pump is the second
+                modulation_freq=np.abs(self.evals[k]-self.evals[j]) - detuning_ij,
+                phi=phi,
                 pulse_shape_args={
-                    'w_d': np.abs(self.evals[k]-self.evals[j]) - detuning_ij,  # Without 2pi
                     'amp': amp_jk,  # Without 2pi
                     't_stop': t_stop,
                     'stoke': True,
                     't_start': t_start,
-                    'phi': phi
                 },
             ),
             DriveTerm(
                 driven_op=qutip.Qobj(
                     self.fluxonium.n_operator(energy_esys=True)),
-                pulse_shape_func=STIRAP_with_modulation,
+                pulse_shape_func=STIRAP_envelope,
                 pulse_id='pump',
+                modulation_freq=np.abs(self.evals[j]-self.evals[i]) - detuning_jk,
+                phi=phi,
                 pulse_shape_args={
-                    'w_d': np.abs(self.evals[j]-self.evals[i]) - detuning_jk,  # Without 2pi
                     'amp': amp_ij,  # Without 2pi
                     't_stop': t_stop,
                     'stoke': False,
                     't_start': t_start,
-                    'phi': phi
                 },
             ),
         ]
@@ -166,10 +166,11 @@ class gfIFQ(QuantumSystem):
                 DriveTerm(
                     driven_op=qutip.Qobj(
                         self.fluxonium.n_operator(energy_esys=True)),
-                    pulse_shape_func=sin_squared_pulse_with_modulation,
+                    pulse_shape_func=sin_squared_pulse_envelope,
                     pulse_id='ij',
+                    modulation_freq=np.abs(self.evals[k]-self.evals[j])-detuning1,
+                    phi=phi,
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning1,  # Without 2pi
                         'amp': amp_jk,  # Without 2pi
                         't_duration': t_duration,
                         't_start': t_start,
@@ -179,10 +180,11 @@ class gfIFQ(QuantumSystem):
                 DriveTerm(
                     driven_op=qutip.Qobj(
                         self.fluxonium.n_operator(energy_esys=True)),
-                    pulse_shape_func=sin_squared_pulse_with_modulation,
+                    pulse_shape_func=sin_squared_pulse_envelope,
                     pulse_id='jk',
+                    modulation_freq=np.abs(self.evals[j]-self.evals[i])-detuning2,
+                    phi=phi,
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning2,  # Without 2pi
                         'amp': amp_ij,  # Without 2pi
                         't_duration': t_duration,
                         't_start': t_start,
@@ -202,10 +204,11 @@ class gfIFQ(QuantumSystem):
                 DriveTerm(
                     driven_op=qutip.Qobj(
                         self.fluxonium.n_operator(energy_esys=True)),
-                    pulse_shape_func=gaussian_pulse,
+                    pulse_shape_func=gaussian_pulse_envelope,
                     pulse_id='ij',
+                    modulation_freq=np.abs(self.evals[j]-self.evals[i])-detuning1,
+                    phi=phi,
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning1,  # Without 2pi
                         'amp': amp_ij,  # Without 2pi
                         't_duration': t_duration,
                         'how_many_sigma': how_many_sigma,
@@ -215,10 +218,11 @@ class gfIFQ(QuantumSystem):
                 DriveTerm(
                     driven_op=qutip.Qobj(
                         self.fluxonium.n_operator(energy_esys=True)),
-                    pulse_shape_func=gaussian_pulse,
+                    pulse_shape_func=gaussian_pulse_envelope,
                     pulse_id='jk',
+                    modulation_freq=np.abs(self.evals[k]-self.evals[j])-detuning2,
+                    phi=phi,
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning2,  # Without 2pi
                         'amp': amp_jk,  # Without 2pi
                         't_duration': t_duration,
                         'how_many_sigma': how_many_sigma,
@@ -260,10 +264,11 @@ class gfIFQ(QuantumSystem):
                 DriveTerm(
                     driven_op=qutip.Qobj(
                         self.fluxonium.n_operator(energy_esys=True)),
-                    pulse_shape_func=sin_squared_DRAG_with_modulation,
+                    pulse_shape_func=sin_squared_DRAG_envelope,
                     pulse_id='ij',
+                    modulation_freq=np.abs(self.evals[j]-self.evals[i])-detuning1,
+                    phi=phi,
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning1,  # Without 2pi
                         'amp': amp_ij,  # Without 2pi
                         'amp_correction': amp_ij*amp1_correction_scaling_factor,
                         't_duration': t_duration,
@@ -274,10 +279,11 @@ class gfIFQ(QuantumSystem):
                 DriveTerm(
                     driven_op=qutip.Qobj(
                         self.fluxonium.n_operator(energy_esys=True)),
-                    pulse_shape_func=sin_squared_DRAG_with_modulation,
+                    pulse_shape_func=sin_squared_DRAG_envelope,
                     pulse_id='jk',
+                    modulation_freq=np.abs(self.evals[k]-self.evals[j])-detuning2,
+                    phi=phi,
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning2,  # Without 2pi
                         'amp': amp_jk,  # Without 2pi
                         'amp_correction': amp_jk*amp2_correction_scaling_factor,
                         't_duration': t_duration,
@@ -298,10 +304,11 @@ class gfIFQ(QuantumSystem):
                 DriveTerm(
                     driven_op=qutip.Qobj(
                         self.fluxonium.n_operator(energy_esys=True)),
-                    pulse_shape_func=gaussian_DRAG_pulse,
+                    pulse_shape_func=gaussian_DRAG_pulse_envelope,
                     pulse_id='ij',
+                    modulation_freq=np.abs(self.evals[j]-self.evals[i])-detuning1,
+                    phi=phi,
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[j]-self.evals[i])-detuning1,  # Without 2pi
                         'amp': amp_ij,  # Without 2pi
                         't_duration': t_duration,
                         'how_many_sigma': how_many_sigma,
@@ -312,10 +319,11 @@ class gfIFQ(QuantumSystem):
                 DriveTerm(
                     driven_op=qutip.Qobj(
                         self.fluxonium.n_operator(energy_esys=True)),
-                    pulse_shape_func=gaussian_DRAG_pulse,
+                    pulse_shape_func=gaussian_DRAG_pulse_envelope,
                     pulse_id='jk',
+                    modulation_freq=np.abs(self.evals[k]-self.evals[j])-detuning2,
+                    phi=phi,
                     pulse_shape_args={
-                        'w_d': np.abs(self.evals[k]-self.evals[j])-detuning2,  # Without 2pi
                         'amp': amp_jk,  # Without 2pi
                         't_duration': t_duration,
                         'how_many_sigma': how_many_sigma,
@@ -362,12 +370,12 @@ class gfIFQ(QuantumSystem):
                     self.fluxonium.n_operator(energy_esys=True)),
                 pulse_shape_func=square_pulse_with_rise_fall_envelope,
                 pulse_id='pi',
+                modulation_freq=self.evals[j]-self.evals[i],
+                phi=0.0,
                 pulse_shape_args={
                     'amp': amp,  # Without 2pi
                     't_square': t_square,
                 },
-                modulation_freq=self.evals[j]-self.evals[i],  # Without 2pi
-                phi=0.0
             )
         ]
         return drive_terms

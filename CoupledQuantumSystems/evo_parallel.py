@@ -5,6 +5,7 @@ from CoupledQuantumSystems.systems import QuantumSystem
 from CoupledQuantumSystems.drive import *
 from CoupledQuantumSystems.qobj_manip import pad_back_custom,dressed_to_2_level_dm
 from CoupledQuantumSystems.evo import ODEsolve_and_post_process
+from tqdm import tqdm
 
 def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
         list_of_systems: List[QuantumSystem],
