@@ -75,6 +75,7 @@ def ODEsolve_and_post_process(
         qiskit_solver = Solver(
             static_hamiltonian=static_hamiltonian.full(),
             hamiltonian_operators=[drive_term.driven_op.full() for drive_term in drive_terms],
+            static_dissipators= [op.full() for op in c_ops] if  c_ops is not None else None,
             rotating_frame=rotating_frame,
             rwa_cutoff_freq=rwa_cutoff_freq,
             rwa_carrier_freq=rwa_carrier_freq
