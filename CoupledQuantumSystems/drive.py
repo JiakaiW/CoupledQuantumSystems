@@ -42,8 +42,8 @@ class DriveTerm:
     driven_op: qutip.Qobj
     pulse_shape_func: Callable
     pulse_shape_args: Dict[str, float]
-    modulation_freq: float = 0.0
-    phi: float = 0.0
+    modulation_freq: float
+    phi: float=0.0
 
     pulse_id: str = None
     pulse_shape_func_with_id: Callable = field(init=False)
