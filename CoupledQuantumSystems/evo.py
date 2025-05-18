@@ -70,7 +70,7 @@ def ODEsolve_and_post_process(
             static_hamiltonian=static_hamiltonian.full(),
             hamiltonian_operators=[drive_term.driven_op.full() for drive_term in drive_terms],
             static_dissipators= [op.full() for op in c_ops] if  c_ops is not None else None,
-            rotating_frame=rotating_frame,
+            rotating_frame=rotating_frame.full() if isinstance(rotating_frame, qutip.Qobj) else rotating_frame,
             rwa_cutoff_freq=rwa_cutoff_freq,
             rwa_carrier_freqs=rwa_carrier_freqs
         )
