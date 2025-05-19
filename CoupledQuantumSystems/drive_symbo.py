@@ -124,7 +124,8 @@ class DriveTermSymbolic:
                     else:
                         pure_shape_val = self._internal_symbolic_expr_pure.evalf(subs=subs_dict)
 
-                return self.amplitude * pure_shape_val 
+                complex_amp_factor = self.amplitude * math.exp(1j * self.envelope_angle)
+                return complex_amp_factor * pure_shape_val 
             
             self.pulse_shape_func = _symbolic_envelope_func
 
@@ -191,8 +192,6 @@ class DriveTermSymbolic:
             print("Warning: to_qiskit_signal_jax called without symbolic pulse_type. Falling back to numpy-based Signal.")
             return self.to_qiskit_signal_numpy()
 
-        ssp_amp_val = self.amplitude
-        ssp_envelope_angle_val = self.envelope_angle
         ssp_duration_samples = int(round(self.duration / self.dt))
         if ssp_duration_samples <= 0:
             raise ValueError(
@@ -202,25 +201,47 @@ class DriveTermSymbolic:
         
         ssp_envelope_expr = self._internal_symbolic_expr_pure 
         ssp_parameters = {sym.name: float(val) for sym, val in self.symbolic_params.items()}
-
+        # 1. Get the pure symbolic shape
+        pure_expr = self._internal_symbolic_expr_pure 
+        
+        # 2. Handle Time Symbol and Scaling for the pure shape
         pulse_spec_entry = PULSE_PARAM_SPECS[self.pulse_type]
-        pulse_spec_t_sym = pulse_spec_entry.t_symbol
 
-        if str(pulse_spec_t_sym) != default_t_sym.name:
-             ssp_envelope_expr = ssp_envelope_expr.subs({pulse_spec_t_sym: default_t_sym})
-        # After the above, the time symbol in ssp_envelope_expr is default_t_sym.
-        # Scale this time symbol to account for Qiskit's ScalableSymbolicPulse using t in samples.
-        # self.dt is in seconds. Parameters in ssp_parameters are in seconds.
-        # So, t_samples * dt effectively converts Qiskit's sample time to physical time within the expression.
-        ssp_envelope_expr_scaled_time = ssp_envelope_expr.subs({default_t_sym: default_t_sym * self.dt})
+        time_sym_in_pure_expr = pulse_spec_entry.t_symbol # This is typically pss.t_sym (sp.Symbol('t'))
+        
+        # Ensure the time symbol is default_t_sym (sp.Symbol('t')) before scaling
+        # default_t_sym is imported from pulse_shapes_symbo as t_sym
+        if str(time_sym_in_pure_expr) != default_t_sym.name:
+            pure_expr_using_default_t = pure_expr.subs({time_sym_in_pure_expr: default_t_sym})
+        else:
+            pure_expr_using_default_t = pure_expr
 
+        # Scale time: t_samples -> t_samples * dt. default_t_sym is the symbol for t_samples here.
+        scaled_time_pure_expr = pure_expr_using_default_t.subs({default_t_sym: default_t_sym * self.dt})
+
+        # 3. Define Qiskit Amplitude/Angle Symbols
+        q_amp_sym = sp.Symbol('amp')
+        q_angle_sym = sp.Symbol('angle')
+
+        # 4. Construct Full Qiskit Envelope, now including symbolic amp and angle
+        # scaled_time_pure_expr is the f(t_samples*dt, shape_params_seconds)
+        qiskit_ssp_envelope = q_amp_sym * sp.exp(sp.I * q_angle_sym) * scaled_time_pure_expr
+        
+        # 5. Populate Parameters Dictionary
+        # Start with shape-specific parameters (values in seconds)
+        ssp_parameters = {sym.name: float(val) for sym, val in self.symbolic_params.items()}
+        # Add values for the new amp and angle symbols
+        # ssp_parameters[q_amp_sym.name] = self.amplitude
+        # ssp_parameters[q_angle_sym.name] = self.envelope_angle
+
+        # 6. Instantiate ScalableSymbolicPulse
         this_pulse_instance = pulse.ScalableSymbolicPulse(
             pulse_type=self.pulse_id or f"{self.pulse_type}_ssp",
             duration=ssp_duration_samples,
-            amp=ssp_amp_val,
-            angle=ssp_envelope_angle_val, 
+            amp=self.amplitude,
+            angle=self.envelope_angle, 
             parameters=ssp_parameters,
-            envelope=ssp_envelope_expr_scaled_time,
+            envelope=qiskit_ssp_envelope,
             name=self.pulse_id or f"{self.pulse_type}_ssp_pulse"
         )
         
