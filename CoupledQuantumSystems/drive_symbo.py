@@ -22,8 +22,6 @@ import sympy as sp
 from qiskit_dynamics import Signal
 from qiskit import pulse
 from qiskit_dynamics.pulse import InstructionToSignals
-import functools
-import cmath # For complex exponential
 
 # Import from local package
 from .pulse_shapes_symbo import create_pulse_shape, PULSE_PARAM_SPECS, t_sym as default_t_sym
