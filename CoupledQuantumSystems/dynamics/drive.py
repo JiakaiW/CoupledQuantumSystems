@@ -82,7 +82,7 @@ class DriveTerm:
         if not JAX_AVAILABLE:
             raise ImportError("JAX is not installed. Please install it using 'pip install CoupledQuantumSystems[jax]'")
         def jax_pulse_shape_func(t, args):
-            return self.pulse_shape_func_with_id(t, args, math=jnp)*jnp.cos(2 * jnp.pi * self.modulation_freq * t - self.phi)
+            return self.pulse_shape_func_with_id(t, args, math=jnp)
         return jax_pulse_shape_func
 
     def get_pulse_shape_args_with_id(self) -> Dict[str, float]:
