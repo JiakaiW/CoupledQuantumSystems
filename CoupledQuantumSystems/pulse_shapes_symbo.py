@@ -7,15 +7,16 @@
 from __future__ import annotations
 
 import sympy as sp
-from typing import Dict, Tuple, List, Optional, Set
+from typing import Dict, Tuple, List, Optional, Set, Callable, Any
 from dataclasses import dataclass, field
 import inspect
+import numpy as np # For PulseShapeCallable fallback
 
 # Special symbols used by Qiskit's ScalableSymbolicPulse
 QISKIT_SPECIAL_SYMBOLS = {'t', 'duration', 'amp', 'angle'}
 
 # Common symbols used across pulse shapes
-t = sp.symbols('t', real=True)
+t_sym = sp.symbols('t', real=True)
 # amp = sp.symbols('amp', real=True) # Amplitude will be handled by DriveTermSymbolic
 start = sp.symbols('start', real=True)
 length = sp.symbols('length', real=True)
@@ -41,7 +42,7 @@ class PulseParameters:
     4. Clear error messages are provided when validation fails
     
     Note: The following symbols are treated specially and don't need to be documented:
-    - 't': The time variable
+    - 't': The time variable (or t_sym)
     The following are handled by DriveTermSymbolic directly:
     - 'amp': Pulse amplitude
     - 'duration': Overall pulse duration for Qiskit
@@ -73,19 +74,15 @@ class PulseParameters:
                 f"Please ensure these required parameters are part of the expression, or remove them from required_params."
             )
         
-        symbols_needing_check = symbols_in_expr_str - {'t'}
+        symbols_needing_check = symbols_in_expr_str - {t_sym.name}
         documented_as_param_by_user = set(self.required_params) | set(self.optional_params.keys())
         
-        # Qiskit special symbols that are NOT 't' and also NOT primary DriveTermSymbolic attributes handled outside shape
-        # For example, if a shape internally uses a symbol named 'duration' for a sub-component, it's fine.
-        # But 'amp', 'duration' (overall), 'angle' (overall) are not expected to be shape params anymore.
-        other_qiskit_special_symbols = QISKIT_SPECIAL_SYMBOLS - {'t', 'amp', 'duration', 'angle'}
+        other_qiskit_special_symbols = QISKIT_SPECIAL_SYMBOLS - {t_sym.name, 'amp', 'duration', 'angle'}
         
         extra_symbols = symbols_needing_check - documented_as_param_by_user - other_qiskit_special_symbols
         
         if extra_symbols:
-            # Check if any of these extra symbols are the now-externalized DriveTermSymbolic attributes
-            externalized_attrs = {'amp', 'angle'} # 'duration' is less likely to be a free symbol in a pure shape expr
+            externalized_attrs = {'amp', 'angle'}
             improperly_used_external = extra_symbols & externalized_attrs
             if improperly_used_external:
                 raise ValueError(
@@ -126,28 +123,25 @@ def validate_pulse_definition(func):
         
         params_obj.validate_against_expr(expr)
         
-        default_symbols = {str(sym) for sym in defaults.keys() 
-                          if str(sym) not in (QISKIT_SPECIAL_SYMBOLS | {'amp', 'angle'})} # Exclude amp, angle as well
-        optional_symbols = set(params_obj.optional_params.keys())
-        if default_symbols != optional_symbols:
-            # Allow optional_params to not be in defaults if their default is implicitly handled (e.g. 0 or specific sympy obj)
-            # However, all keys in defaults MUST be in optional_params
-            missing_in_optional = default_symbols - optional_symbols
-            if missing_in_optional:
-                raise ValueError(
-                    f"Defaults in {func.__name__} contains keys {missing_in_optional} not in optional_params. "
-                    f"Defaults: {default_symbols}, Optional: {optional_symbols}"
-                )
-            # And all optional_params should ideally have a default if not required
-            # This part is more about good practice for defining defaults.
-            # For now, ensure defaults.keys() is a subset of optional_params.keys()
-            if not default_symbols.issubset(optional_symbols):
-                 raise ValueError(
-                    f"Defaults keys in {func.__name__} must be a subset of optional_params keys. "
-                    f"Default keys: {default_symbols}, Optional keys: {optional_symbols}"
-                )
-
-
+        default_symbols_names = {str(sym_obj.name) for sym_obj in defaults.keys()
+                                 if str(sym_obj.name) not in (QISKIT_SPECIAL_SYMBOLS | {'amp', 'angle'})}
+        optional_params_names = set(params_obj.optional_params.keys())
+        
+        # All keys in defaults (their names) MUST be in optional_params_names
+        missing_in_optional = default_symbols_names - optional_params_names
+        if missing_in_optional:
+            raise ValueError(
+                f"Defaults in {func.__name__} contains keys {missing_in_optional} not in optional_params. "
+                f"Default symbol names: {default_symbols_names}, Optional param names: {optional_params_names}"
+            )
+        # All optional_params_names should ideally have a default if not required.
+        # Ensure default_symbols_names is a subset of optional_params_names after filtering.
+        # This check is subtly different from before, focusing on names.
+        if not default_symbols_names.issubset(optional_params_names):
+             raise ValueError(
+                f"Defaults keys in {func.__name__} (after filtering special symbols) must be a subset of optional_params keys. "
+                f"Filtered default symbol names: {default_symbols_names}, Optional param names: {optional_params_names}"
+            )
         return result
     return wrapper
 
@@ -159,21 +153,21 @@ def square_pulse_with_rise_fall() -> Tuple[sp.Expr, Dict[sp.Symbol, float], Puls
     end_time = t_fall_start + rise # Renamed 'end' to 'end_time' to avoid conflict
     
     rise_window = sp.Piecewise(
-        (1, (t >= start) & (t <= start + rise)),
+        (1, (t_sym >= start) & (t_sym <= start + rise)),
         (0, True)
     )
     square_window_val = sp.Piecewise( # Renamed 'square_window' to 'square_window_val'
-        (1, (t >= start + rise) & (t <= t_fall_start)),
+        (1, (t_sym >= start + rise) & (t_sym <= t_fall_start)),
         (0, True)
     )
     fall_window = sp.Piecewise(
-        (1, (t >= t_fall_start) & (t <= end_time)),
+        (1, (t_sym >= t_fall_start) & (t_sym <= end_time)),
         (0, True)
     )
     
-    rise_envelope = rise_window * sp.sin(sp.pi * (t - start) / (2 * rise)) ** 2
+    rise_envelope = rise_window * sp.sin(sp.pi * (t_sym - start) / (2 * rise)) ** 2
     square_envelope_val = square_window_val # Renamed 'square_envelope' to 'square_envelope_val'
-    fall_envelope = fall_window * sp.sin(sp.pi * (end_time - t) / (2 * rise)) ** 2
+    fall_envelope = fall_window * sp.sin(sp.pi * (end_time - t_sym) / (2 * rise)) ** 2
     
     envelope = (square_envelope_val + rise_envelope + fall_envelope)
     
@@ -212,11 +206,11 @@ def sin_squared_pulse() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameter
     end_time = start + length # Renamed 'end' to 'end_time'
     
     inside_window = sp.Piecewise(
-        (1, (t >= start) & (t <= end_time)),
+        (1, (t_sym >= start) & (t_sym <= end_time)),
         (0, True)
     )
     
-    envelope = inside_window * sp.sin(sp.pi * (t - start) / length) ** 2
+    envelope = inside_window * sp.sin(sp.pi * (t_sym - start) / length) ** 2
     
     defaults = {
         start: 0.0
@@ -251,12 +245,12 @@ def sin_squared_DRAG() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters
     end_time = start + length # Renamed 'end' to 'end_time'
     
     inside_window = sp.Piecewise(
-        (1, (t >= start) & (t <= end_time)),
+        (1, (t_sym >= start) & (t_sym <= end_time)),
         (0, True)
     )
     
-    main_envelope = inside_window * sp.sin(sp.pi * (t - start) / length) ** 2
-    derivative_envelope = inside_window * (sp.pi/length) * sp.sin(2 * sp.pi * (t - start) / length)
+    main_envelope = inside_window * sp.sin(sp.pi * (t_sym - start) / length) ** 2
+    derivative_envelope = inside_window * (sp.pi/length) * sp.sin(2 * sp.pi * (t_sym - start) / length)
     
     # amp_correction is the coefficient beta in E(t) * (1 - i * beta * E_dot(t) / E(t))
     # Here, E(t) is main_envelope, E_dot(t) is derivative_envelope.
@@ -301,18 +295,18 @@ def gaussian_pulse() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
     t_center = start + length / 2
     
     # Pure Gaussian shape, peak is 1 at t_center if not windowed
-    gaussian_shape = sp.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
+    gaussian_shape = sp.exp(-((t_sym - t_center) ** 2) / (2 * sigma ** 2))
     
     end_time = start + length # Renamed 'end' to 'end_time'
     inside_window = sp.Piecewise(
-        (1, (t >= start) & (t <= end_time)),
+        (1, (t_sym >= start) & (t_sym <= end_time)),
         (0, True)
     )
     
     windowed_gaussian = inside_window * gaussian_shape
     
     # Normalization logic (lifted Gaussian)
-    val_at_start = gaussian_shape.subs(t, start) # Value of pure shape at window start
+    val_at_start = gaussian_shape.subs(t_sym, start) # Value of pure shape at window start
     
     # If normalize=True, make it (G(t)-G(start))/(1-G(start)) within window
     # If normalize=False, just use G(t) within window
@@ -366,15 +360,15 @@ def gaussian_DRAG() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
     sigma = length / how_many_sigma
     t_center = start + length / 2
     
-    gaussian_shape = sp.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
+    gaussian_shape = sp.exp(-((t_sym - t_center) ** 2) / (2 * sigma ** 2))
     
     end_time = start + length # Renamed 'end' to 'end_time'
     inside_window = sp.Piecewise(
-        (1, (t >= start) & (t <= end_time)),
+        (1, (t_sym >= start) & (t_sym <= end_time)),
         (0, True)
     )
     windowed_gaussian = inside_window * gaussian_shape
-    val_at_start = gaussian_shape.subs(t, start)
+    val_at_start = gaussian_shape.subs(t_sym, start)
     
     main_envelope = sp.Piecewise(
         (((windowed_gaussian - val_at_start * inside_window) / (1 - val_at_start)), normalize),
@@ -396,7 +390,7 @@ def gaussian_DRAG() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
     # Let's assume amp_correction applies to derivative of the *final* main_envelope.
     # Sympy can compute derivative of main_envelope directly.
     
-    derivative_of_main_envelope = sp.diff(main_envelope, t)
+    derivative_of_main_envelope = sp.diff(main_envelope, t_sym)
 
     # The drag_correction from the original user code was:
     # drag_correction = 1 + sp.I * amp_correction * (-(t - t_center)/sigma**2)
@@ -460,14 +454,14 @@ def STIRAP_stoke() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
     # mono_increasing can be negative if t < center for exp argument
     mono_increasing = sp.Function('mono_increasing')
     try:
-        mono_increasing_expr = 1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono))
+        mono_increasing_expr = 1 / (1 + sp.exp(-lambda_val * (t_sym - center) / tau_for_mono))
     except OverflowError: # Should not happen with symbolic
         mono_increasing_expr = sp.Rational(1,2) # Fallback, though symbolic should handle
 
-    hyper_Gaussian_exponent = -((t - center) / (2 * tau_for_mono)) ** sp.Integer(6)
+    hyper_Gaussian_exponent = -((t_sym - center) / (2 * tau_for_mono)) ** sp.Integer(6)
     hyper_Gaussian = sp.exp(hyper_Gaussian_exponent)
     
-    val_at_start = hyper_Gaussian.subs(t, start) # Value of pure shape at window start
+    val_at_start = hyper_Gaussian.subs(t_sym, start) # Value of pure shape at window start
     
     # Normalized hyper-Gaussian part
     # Ensure (1-a) is not zero; for hypergaussian this should be fine if stop > start
@@ -478,7 +472,7 @@ def STIRAP_stoke() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
     
     # Stoke pulse uses cos part of the mixing angle
     # envelope = normalized_hyper_G * sp.cos(sp.pi/2 * mono_increasing_expr) # old symbolic function call
-    envelope = normalized_hyper_G * sp.cos(sp.pi/2 * (1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono))))
+    envelope = normalized_hyper_G * sp.cos(sp.pi/2 * (1 / (1 + sp.exp(-lambda_val * (t_sym - center) / tau_for_mono))))
 
 
     defaults = {
@@ -515,17 +509,17 @@ def STIRAP_pump() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
     tau_for_mono = (stop - start) / sp.Float(6.0)
     center = (stop - start) / sp.Float(2.0) + start
     
-    # mono_increasing_expr = 1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono)) # Re-inline
+    # mono_increasing_expr = 1 / (1 + sp.exp(-lambda_val * (t_sym - center) / tau_for_mono)) # Re-inline
     
-    hyper_Gaussian_exponent = -((t - center) / (2 * tau_for_mono)) ** sp.Integer(6)
+    hyper_Gaussian_exponent = -((t_sym - center) / (2 * tau_for_mono)) ** sp.Integer(6)
     hyper_Gaussian = sp.exp(hyper_Gaussian_exponent)
     
-    val_at_start = hyper_Gaussian.subs(t, start)
+    val_at_start = hyper_Gaussian.subs(t_sym, start)
     # denominator = sp.Max(1 - val_at_start, 1e-9)
     normalized_hyper_G = (hyper_Gaussian - val_at_start) / (1 - val_at_start)
 
     # Pump pulse uses sin part of the mixing angle
-    envelope = normalized_hyper_G * sp.sin(sp.pi/2 * (1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono))))
+    envelope = normalized_hyper_G * sp.sin(sp.pi/2 * (1 / (1 + sp.exp(-lambda_val * (t_sym - center) / tau_for_mono))))
     
     defaults = {
         start: 0.0
@@ -562,13 +556,13 @@ def Hyper_Gaussian_DRAG_STIRAP_stoke() -> Tuple[sp.Expr, Dict[sp.Symbol, float],
     tau_mono = (stop - start) / sp.Float(6.0)
     center_time = (stop + start) / sp.Float(2.0) # Renamed center to center_time
         
-    mono_expr = 1 / (1 + sp.exp(-lambda_val * (t - center_time) / tau_mono))
+    mono_expr = 1 / (1 + sp.exp(-lambda_val * (t_sym - center_time) / tau_mono))
     
     T0 = 2 * tau_mono
-    hyperG_expr = sp.exp(-((t - center_time) / T0) ** 6)
+    hyperG_expr = sp.exp(-((t_sym - center_time) / T0) ** 6)
     # d_hyperG = hyperG_expr * (-6) * ((t - center_time) / T0) ** 5 / T0 # For derivative calc later
     
-    a0 = hyperG_expr.subs(t, start)
+    a0 = hyperG_expr.subs(t_sym, start)
     
     # Main STIRAP stoke envelope (normalized)
     main_envelope = (hyperG_expr - a0) / (1 - a0) * sp.cos(sp.pi/2 * mono_expr)
@@ -578,7 +572,7 @@ def Hyper_Gaussian_DRAG_STIRAP_stoke() -> Tuple[sp.Expr, Dict[sp.Symbol, float],
     # d_main_envelope_term1 = (d_hyperG / (1 - a0) - (hyperG_expr - a0) / (1 - a0)**2 * d_hyperG.subs(t, start)) * sp.cos(sp.pi/2 * mono_expr)
     # d_main_envelope_term2 = (hyperG_expr - a0)/(1 - a0) * (-sp.pi/2) * sp.sin(sp.pi/2 * mono_expr) * d_mono
     # derivative_of_main_envelope = d_main_envelope_term1 + d_main_envelope_term2
-    derivative_of_main_envelope = sp.diff(main_envelope, t)
+    derivative_of_main_envelope = sp.diff(main_envelope, t_sym)
 
     complex_envelope = main_envelope - sp.I * amp_correction * derivative_of_main_envelope
     
@@ -619,18 +613,18 @@ def Hyper_Gaussian_DRAG_STIRAP_pump() -> Tuple[sp.Expr, Dict[sp.Symbol, float], 
     tau_mono = (stop - start) / sp.Float(6.0)
     center_time = (stop + start) / sp.Float(2.0) # Renamed center to center_time
     
-    mono_expr = 1 / (1 + sp.exp(-lambda_val * (t - center_time) / tau_mono))
+    mono_expr = 1 / (1 + sp.exp(-lambda_val * (t_sym - center_time) / tau_mono))
     
     T0 = 2 * tau_mono
-    hyperG_expr = sp.exp(-((t - center_time) / T0) ** 6)
+    hyperG_expr = sp.exp(-((t_sym - center_time) / T0) ** 6)
     # d_hyperG = hyperG_expr * (-6) * ((t - center_time) / T0) ** 5 / T0
     
-    a0 = hyperG_expr.subs(t, start)
+    a0 = hyperG_expr.subs(t_sym, start)
     
     main_envelope = (hyperG_expr - a0) / (1 - a0) * sp.sin(sp.pi/2 * mono_expr)
     # derivative_of_main_envelope = (d_hyperG / (1 - a0) - (hyperG_expr - a0) / (1 - a0)**2 * d_hyperG.subs(t, start)) * sp.sin(sp.pi/2 * mono_expr) + \
     #              (hyperG_expr - a0)/(1 - a0) * (sp.pi/2) * sp.cos(sp.pi/2 * mono_expr) * (lambda_val / tau_mono) * mono_expr * (1 - mono_expr)
-    derivative_of_main_envelope = sp.diff(main_envelope, t)
+    derivative_of_main_envelope = sp.diff(main_envelope, t_sym)
     
     complex_envelope = main_envelope - sp.I * amp_correction * derivative_of_main_envelope
     
@@ -680,23 +674,23 @@ def sin_squared_recursive_DRAG() -> Tuple[sp.Expr, Dict[sp.Symbol, float], Pulse
     pi_over_L = sp.pi / length
     
     inside = sp.Piecewise(
-        (1, (t >= start) & (t <= end_time)),
+        (1, (t_sym >= start) & (t_sym <= end_time)),
         (0, True)
     )
     
     # Main sin^2 envelope, peak is 1
-    main_envelope = inside * sp.sin(sp.pi * (t - start) / length) ** 2
+    main_envelope = inside * sp.sin(sp.pi * (t_sym - start) / length) ** 2
     
     # 1st derivative of main_envelope
     # derivative1 = inside * pi_over_L * sp.sin(two_pi_over_L * (t - start))
-    derivative1 = sp.diff(main_envelope, t) # More robust way to get derivative
+    derivative1 = sp.diff(main_envelope, t_sym) # More robust way to get derivative
     
     # 2nd derivative of main_envelope
     # derivative2 = inside * 2 * (pi_over_L ** 2) * (sp.cos(two_pi_over_L * (t - start)) - 1)
     # Sympy might simplify the derivative of Piecewise, which is good.
     # For recursive DRAG, often derivatives of the un-windowed shape are used, then windowed.
     # Let's use derivative of the windowed main_envelope.
-    derivative2 = sp.diff(derivative1, t)
+    derivative2 = sp.diff(derivative1, t_sym)
         
     baseband_envelope = main_envelope + sp.I * kappa1_norm * derivative1 + kappa2_norm * derivative2
     
@@ -729,3 +723,165 @@ def sin_squared_recursive_DRAG() -> Tuple[sp.Expr, Dict[sp.Symbol, float], Pulse
     )
     
     return baseband_envelope, defaults, params 
+
+# --- Pulse Registry and Creation Logic (Simplified) ---
+
+@dataclass
+class PulseSpecEntry:
+    """Holds the processed information for a pulse type."""
+    pure_expr: sp.Expr
+    ordered_param_symbols: List[sp.Symbol]
+    t_symbol: sp.Symbol
+    validator_params_obj: PulseParameters # For validating inputs in create_pulse_shape
+    # defaults: Dict[sp.Symbol, float] # Kept by validator_params_obj.optional_params
+
+PULSE_PARAM_SPECS: Dict[str, PulseSpecEntry] = {}
+
+def _get_global_symbol_by_name(name: str, default_if_not_found: Optional[sp.Symbol] = None) -> Optional[sp.Symbol]:
+    """Helper to get a globally defined sympy symbol object by its string name."""
+    # Check common symbols defined in this file first
+    known_symbols = {
+        't': t_sym, 'start': start, 'length': length, 'rise': rise, 'square': square,
+        'stop': stop, 'amp_correction': amp_correction, 'how_many_sigma': how_many_sigma,
+        'stoke': stoke, 'delta1': delta1, 'delta2': delta2, 'normalize': normalize
+    }
+    if name in known_symbols:
+        return known_symbols[name]
+    
+    # Fallback to checking globals(), though less robust if symbol isn\'t directly in module globals
+    sym_obj = globals().get(name)
+    if isinstance(sym_obj, sp.Symbol):
+        return sym_obj
+    return default_if_not_found
+
+def _register_pulse_spec(
+    name: str, 
+    func: Callable[[], Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]]
+):
+    expr, defaults, params_obj = func() # Call the @validated pulse definition function
+
+    # Determine ordered_shape_param_symbols based on params_obj and expr.free_symbols
+    # The order is: required params (in order of definition), then optional params (alphabetical)
+    ordered_symbols_list: List[sp.Symbol] = []
+    processed_names: Set[str] = set()
+
+    # 1. Add required parameters in their defined order
+    for req_name in params_obj.required_params:
+        sym_obj = _get_global_symbol_by_name(req_name)
+        if sym_obj is None:
+            # This case implies a required parameter was named but not defined as a global sympy symbol
+            # Or _get_global_symbol_by_name couldn\'t find it.
+            # For robustness, one might create sp.symbols(req_name) here, but it\'s better to predefine all.
+            raise ValueError(f"Symbol for required parameter \'{req_name}\' not found for pulse \'{name}\'. Ensure it\'s a predefined global symbol.")
+        if sym_obj not in expr.free_symbols and sym_obj != t_sym:
+             # This should ideally be caught by params_obj.validate_against_expr if sym_obj is not t_sym
+             # print(f"Warning: Required param symbol {sym_obj} for {name} not in expression free_symbols {expr.free_symbols}")
+             pass # Allow, as validate_against_expr should have caught if its string name is missing.
+        ordered_symbols_list.append(sym_obj)
+        processed_names.add(req_name)
+
+    # 2. Add optional parameters, sorted alphabetically, if they are in the expression
+    optional_names_sorted = sorted(params_obj.optional_params.keys())
+    for opt_name in optional_names_sorted:
+        if opt_name not in processed_names:
+            sym_obj = _get_global_symbol_by_name(opt_name)
+            if sym_obj is None:
+                raise ValueError(f"Symbol for optional parameter \'{opt_name}\' not found for pulse \'{name}\'. Ensure it\'s a predefined global symbol.")
+            # Only add if it actually appears in the expression\'s free symbols
+            if sym_obj in expr.free_symbols and sym_obj != t_sym:
+                ordered_symbols_list.append(sym_obj)
+                processed_names.add(opt_name)
+            elif sym_obj in defaults: # If it has a default, it might be used implicitly
+                # Still add it to the list if it has a defined symbol, as create_pulse_shape might need to pass default
+                # However, for lambdify, only free symbols in the expr should be args.
+                # For now, stick to free symbols for ordered_symbols_list for lambdify.
+                pass 
+
+    # Final check: ensure ordered_symbols_list only contains free symbols of the expression (excluding t_sym)
+    final_ordered_symbols = []
+    expr_free_params = expr.free_symbols - {t_sym}
+    temp_map_for_final_order = {s.name: s for s in expr_free_params}
+
+    # Use the previously determined order (req then opt sorted) but filter strictly by free_symbols
+    for sym_in_initial_order in ordered_symbols_list:
+        if sym_in_initial_order.name in temp_map_for_final_order:
+            final_ordered_symbols.append(temp_map_for_final_order[sym_in_initial_order.name])
+            del temp_map_for_final_order[sym_in_initial_order.name] # Avoid duplicates if logic error
+    # Add any remaining free symbols that weren\'t in req/opt (should not happen if PulseParameters is correct)
+    # Sort them for consistency if any exist
+    for remaining_sym_name in sorted(temp_map_for_final_order.keys()):
+        # print(f"Warning: Symbol {remaining_sym_name} in expression but not in ordered params for {name}. Appending.")
+        final_ordered_symbols.append(temp_map_for_final_order[remaining_sym_name])
+
+
+    spec_entry = PulseSpecEntry(
+        pure_expr=expr,
+        ordered_param_symbols=final_ordered_symbols,
+        t_symbol=t_sym, # Assuming all use the global t_sym
+        validator_params_obj=params_obj
+    )
+    PULSE_PARAM_SPECS[name] = spec_entry
+
+# Register all defined pulse shapes
+# These functions are defined above in the file and decorated with @validate_pulse_definition
+_register_pulse_spec("square_pulse_with_rise_fall", square_pulse_with_rise_fall)
+_register_pulse_spec("sin_squared_pulse", sin_squared_pulse)
+_register_pulse_spec("sin_squared_DRAG", sin_squared_DRAG)
+_register_pulse_spec("gaussian_pulse", gaussian_pulse)
+_register_pulse_spec("gaussian_DRAG", gaussian_DRAG)
+_register_pulse_spec("STIRAP_stoke", STIRAP_stoke)
+_register_pulse_spec("STIRAP_pump", STIRAP_pump)
+_register_pulse_spec("Hyper_Gaussian_DRAG_STIRAP_stoke", Hyper_Gaussian_DRAG_STIRAP_stoke)
+_register_pulse_spec("Hyper_Gaussian_DRAG_STIRAP_pump", Hyper_Gaussian_DRAG_STIRAP_pump)
+_register_pulse_spec("sin_squared_recursive_DRAG", sin_squared_recursive_DRAG)
+
+def create_pulse_shape(
+    pulse_type: str, 
+    params_values: Dict[str, float] # User-provided: Dict[param_name_str, value_float]
+) -> Tuple[sp.Expr, List[sp.Symbol], sp.Symbol]:
+    """Retrieve essential components for a pulse shape.
+
+    Args:
+        pulse_type: The registered name of the pulse shape.
+        params_values: Dictionary of parameter names (strings) to their float values.
+                       These are for the shape-specific parameters.
+
+    Returns:
+        A tuple: (symbolic_expr_pure, ordered_shape_param_symbols, t_symbol_used)
+        - symbolic_expr_pure: The pure SymPy expression for the shape.
+        - ordered_shape_param_symbols: Ordered list of SymPy symbols for shape parameters.
+        - t_symbol_used: The SymPy time symbol used in the expression.
+    """
+    if pulse_type not in PULSE_PARAM_SPECS:
+        raise ValueError(f"Unknown pulse_type: \'{pulse_type}\'. Available: {list(PULSE_PARAM_SPECS.keys())}")
+
+    spec = PULSE_PARAM_SPECS[pulse_type]
+    validator = spec.validator_params_obj
+
+    # Validate provided params_values against the pulse\'s parameter specification
+    # 1. Check for missing required parameters
+    for req_param_name in validator.required_params:
+        if req_param_name not in params_values:
+            raise ValueError(
+                f"Missing required parameter \'{req_param_name}\' for pulse_type \'{pulse_type}\'. "
+                f"Required: {validator.required_params}, Provided: {list(params_values.keys())}"
+            )
+
+    # 2. Check for unknown parameters
+    allowed_param_names = set(validator.required_params) | set(validator.optional_params.keys())
+    for provided_name in params_values.keys():
+        if provided_name not in allowed_param_names:
+            raise ValueError(
+                f"Unknown parameter \'{provided_name}\' provided for pulse_type \'{pulse_type}\'. "
+                f"Allowed: {sorted(list(allowed_param_names))}, Provided: {list(params_values.keys())}"
+            )
+    
+    # All checks passed. Return the core components.
+    # DriveTermSymbolic will use these to lambdify and manage the pulse.
+    # Note: params_values provided to this function are string-keyed. 
+    # DriveTermSymbolic.symbolic_params is Symbol-keyed. The mapping happens there.
+
+    return spec.pure_expr, spec.ordered_param_symbols, spec.t_symbol
+
+# Make sure the global `t_sym` is easily importable if needed elsewhere as `default_t_sym`
+# (though `drive_symbo.py` already imports `t_sym as default_t_sym` if `t_sym` is global here) 
