@@ -124,8 +124,7 @@ class DriveTermSymbolic:
                     else:
                         pure_shape_val = self._internal_symbolic_expr_pure.evalf(subs=subs_dict)
 
-                complex_amp_factor = self.amplitude * cmath.exp(1j * self.envelope_angle) if math is cmath else self.amplitude * math.exp(1j * self.envelope_angle)
-                return complex_amp_factor * pure_shape_val 
+                return self.amplitude * pure_shape_val 
             
             self.pulse_shape_func = _symbolic_envelope_func
 
@@ -209,6 +208,11 @@ class DriveTermSymbolic:
 
         if str(pulse_spec_t_sym) != default_t_sym.name:
              ssp_envelope_expr = ssp_envelope_expr.subs({pulse_spec_t_sym: default_t_sym})
+        # After the above, the time symbol in ssp_envelope_expr is default_t_sym.
+        # Scale this time symbol to account for Qiskit's ScalableSymbolicPulse using t in samples.
+        # self.dt is in seconds. Parameters in ssp_parameters are in seconds.
+        # So, t_samples * dt effectively converts Qiskit's sample time to physical time within the expression.
+        ssp_envelope_expr_scaled_time = ssp_envelope_expr.subs({default_t_sym: default_t_sym * self.dt})
 
         this_pulse_instance = pulse.ScalableSymbolicPulse(
             pulse_type=self.pulse_id or f"{self.pulse_type}_ssp",
@@ -216,7 +220,7 @@ class DriveTermSymbolic:
             amp=ssp_amp_val,
             angle=ssp_envelope_angle_val, 
             parameters=ssp_parameters,
-            envelope=ssp_envelope_expr,
+            envelope=ssp_envelope_expr_scaled_time,
             name=self.pulse_id or f"{self.pulse_type}_ssp_pulse"
         )
         

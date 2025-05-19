@@ -20,10 +20,10 @@ def test_pulse_and_simulation():
     # --- Simulation setup from user example --- 
     max_ql = 2
     max_ol = 3
-    t_tot = 3.0 # Made float for linspace
-    amp_val = 0.1 # Renamed from amp to amp_val to avoid conflict with pss.amp
-    dt_val = 0.222 # Define dt for the simulation and pulse
-    num_points = 4
+    t_tot = 40 # Made float for linspace
+    amp_val = 0.2 # Renamed from amp to amp_val to avoid conflict with pss.amp
+    dt_val = 0.05 # Define dt for the simulation and pulse
+    num_points = 21
     tlist_sim = np.linspace(0, t_tot, num_points)
 
     ncut = 110
@@ -44,22 +44,22 @@ def test_pulse_and_simulation():
         kappa=kappa_val,
         products_to_keep=[[ql, ol] for ql in range(max_ql) for ol in range(max_ol)],
     )
-    
+
     if not system.product_to_dressed:
         print("Warning: system.product_to_dressed is empty. Generating default mapping.")
         system.generate_default_mapping()
-    
+
     key_00 = (0,0)
     key_01 = (0,1)
     key_10 = (1,0)
     key_11 = (1,1)
 
     w_d = ((system.evals[system.product_to_dressed[key_01]] - system.evals[system.product_to_dressed[key_00]]) + \
-           (system.evals[system.product_to_dressed[key_11]] - system.evals[system.product_to_dressed[key_10]])) / 2
+            (system.evals[system.product_to_dressed[key_11]] - system.evals[system.product_to_dressed[key_10]])) / 2
 
     e_ops = [qutip.ket2dm(qutip.basis(max_ql * max_ol, system.product_to_dressed[(ql, ol)])) 
-             for ql in range(max_ql) for ol in range(max_ol)] + [system.a.dag() * system.a]
-    
+                for ql in range(max_ql) for ol in range(max_ol)] + [system.a.dag() * system.a]
+
 
     current_t_start = 0.0
     current_t_rise = 1e-13 #small number to avoid division by zero
@@ -95,10 +95,10 @@ def test_pulse_and_simulation():
     # It internally calculates t_fall_start and t_end based on these.
     # Its 't_start' corresponds to pss.start.
     qutip_pulse_args = {
-        'amp': amp_val/2/np.pi, # Note: old envelope might have 2*pi scaling, new pure shape does not.
-                       # The 'amplitude' in DriveTermSymbolic is the final scale factor.
-                       # If square_pulse_with_rise_fall_envelope includes 2*pi, amp_val here should be 1/(2*pi) for same field strength
-                       # Let's assume square_pulse_with_rise_fall_envelope expects amp for the final field, like DriveTermSymbolic.amplitude
+        'amp': amp_val/(2*np.pi), # Note: old envelope might have 2*pi scaling, new pure shape does not.
+                        # The 'amplitude' in DriveTermSymbolic is the final scale factor.
+                        # If square_pulse_with_rise_fall_envelope includes 2*pi, amp_val here should be 1/(2*pi) for same field strength
+                        # Let's assume square_pulse_with_rise_fall_envelope expects amp for the final field, like DriveTermSymbolic.amplitude
         't_start': current_t_start,
         't_rise': current_t_rise,
         't_square': current_t_square,
@@ -151,7 +151,8 @@ def test_pulse_and_simulation():
         qiskit_solver_method='jax_odeint', # Ensure JAX solver is requested
         rotating_frame=system.diag_hamiltonian,
         rwa_carrier_freqs=[w_d],
-        print_progress=True
+        print_progress=True,
+        dt_val = dt_val,
     )
 
     print("Symbolic/Qiskit Dynamics simulation finished.")
@@ -191,14 +192,14 @@ def test_pulse_and_simulation():
             final_state_symbo = result.states[-1]
             final_state_qutip = results_qutip.states[-1]
             if isinstance(final_state_symbo, qutip.Qobj) and isinstance(final_state_qutip, qutip.Qobj):
-                 fidelity = qutip.fidelity(final_state_symbo, final_state_qutip)**2
-                 trace_dist = qutip.tracedist(final_state_symbo, final_state_qutip)
-                 print(f"  Fidelity between final states (symbo vs qutip): {fidelity:.6f}")
-                 print(f"  Trace distance between final states: {trace_dist:.6g}")
-                 if np.allclose(final_state_symbo.full(), final_state_qutip.full(), atol=1e-5): # Relaxed tolerance
-                     print("  Final states are close (allclose check passed with atol=1e-5).")
-                 else:
-                     print("  WARNING: Final states differ significantly.")
+                    fidelity = qutip.fidelity(final_state_symbo, final_state_qutip)**2
+                    trace_dist = qutip.tracedist(final_state_symbo, final_state_qutip)
+                    print(f"  Fidelity between final states (symbo vs qutip): {fidelity:.6f}")
+                    print(f"  Trace distance between final states: {trace_dist:.6g}")
+                    if np.allclose(final_state_symbo.full(), final_state_qutip.full(), atol=1e-5): # Relaxed tolerance
+                        print("  Final states are close (allclose check passed with atol=1e-5).")
+                    else:
+                        print("  WARNING: Final states differ significantly.")
             else:
                 print("  Could not compare final states: Not both Qobj.")
         else:
@@ -206,6 +207,9 @@ def test_pulse_and_simulation():
     else:
         print("  Skipping comparison: one or both results/states are missing.")
 
+    # plt.plot(result.expect[-1],label='symbolic')
+    # plt.plot(results_qutip.expect[-1],label='qutip')
+    # plt.legend()
 
 if __name__ == "__main__":
     test_pulse_and_simulation() 
