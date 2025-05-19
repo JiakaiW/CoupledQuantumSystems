@@ -10,7 +10,7 @@ import numpy as np
 import os
 import inspect
 import sys
-from CoupledQuantumSystems.drive import DriveTerm
+from ..dynamics import DriveTerm
 
 try:
     import dynamiqs as dq

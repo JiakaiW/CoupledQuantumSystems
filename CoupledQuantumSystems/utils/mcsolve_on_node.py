@@ -5,7 +5,7 @@ import gzip
 from dataclasses import dataclass
 from typing import List,Union
 
-from CoupledQuantumSystems.drive import DriveTerm
+from ..dynamics import DriveTerm
 
 @dataclass
 class packed_mcsolve_problem:

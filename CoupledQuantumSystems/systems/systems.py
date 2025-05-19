@@ -2,15 +2,17 @@ from tqdm import tqdm
 import concurrent
 from loky import get_reusable_executor
 from typing import List, Union, Any
-from CoupledQuantumSystems.drive import DriveTerm
-from CoupledQuantumSystems.evo import ODEsolve_and_post_process
-from CoupledQuantumSystems.qobj_manip import generate_single_mapping,truncate_custom,pad_back_custom,dressed_to_2_level_dm, get_product_vectorized
+from ..dynamics import DriveTerm
+from ..dynamics import ODEsolve_and_post_process
+from ..utils import generate_single_mapping,truncate_custom,pad_back_custom,dressed_to_2_level_dm, get_product_vectorized
 import numpy as np
 import qutip
 from itertools import product
 import scqubits
 from functools import partial
 import multiprocessing
+import scipy.sparse as sp
+from functools import reduce
 
 class QuantumSystem:
     """Base class for quantum systems providing common simulation functionality.

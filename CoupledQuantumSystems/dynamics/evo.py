@@ -1,8 +1,8 @@
 import numpy as np
 import qutip
 from typing import List, Union, Any, Dict, Optional, Tuple
-from CoupledQuantumSystems.drive import *
-from CoupledQuantumSystems.drive_symbo import *
+from .drive import *
+from .drive_symbo import *
 from qiskit_dynamics import Solver, Signal
 from tqdm import tqdm
 def ODEsolve_and_post_process(

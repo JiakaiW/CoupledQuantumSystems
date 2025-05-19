@@ -7,8 +7,8 @@ from typing import List,Union
 from tqdm import tqdm
 import gzip
 
-from CoupledQuantumSystems.drive import DriveTerm
-from CoupledQuantumSystems.mcsolve_on_node import packed_mcsolve_problem
+from ..dynamics import DriveTerm
+from .mcsolve_on_node import packed_mcsolve_problem
 
 def pack_mcsolve_chunks(
                     y0: qutip.Qobj,

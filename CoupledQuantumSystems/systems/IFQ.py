@@ -8,10 +8,9 @@ import numpy as np
 import qutip
 import scqubits
 
-from CoupledQuantumSystems.drive import *
-from CoupledQuantumSystems.noise import *
-from CoupledQuantumSystems.qobj_manip import *
-from CoupledQuantumSystems.systems import QuantumSystem
+from ..dynamics import *
+from ..utils import *
+from . import QuantumSystem
 
 class gfIFQ(QuantumSystem):
     """Fluxonium qubit implementation with additional analysis capabilities.

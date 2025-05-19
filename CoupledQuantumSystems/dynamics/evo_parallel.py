@@ -1,10 +1,10 @@
 import concurrent
 from typing import List, Any
 from loky import get_reusable_executor
-from CoupledQuantumSystems.systems import QuantumSystem
-from CoupledQuantumSystems.drive import *
-from CoupledQuantumSystems.qobj_manip import pad_back_custom,dressed_to_2_level_dm
-from CoupledQuantumSystems.evo import ODEsolve_and_post_process, post_process
+from ..systems import QuantumSystem
+from .drive import *
+from ..utils import pad_back_custom,dressed_to_2_level_dm
+from .evo import ODEsolve_and_post_process, post_process
 from tqdm import tqdm
 
 def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
