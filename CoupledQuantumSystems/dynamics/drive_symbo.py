@@ -95,7 +95,20 @@ class DriveTermSymbolic:
             self._pure_shape_np_lambda = sp.lambdify(lambda_args, self._internal_symbolic_expr_pure, modules=["numpy", "sympy"])
             
             if JAX_AVAILABLE:
-                self._pure_shape_jx_lambda = sp.lambdify(lambda_args, self._internal_symbolic_expr_pure, modules=[{"exp": jnp.exp, "conjugate": jnp.conjugate, "Piecewise":jnp.select}, "jax", "sympy"])
+                custom_jax_mappings = {
+                    "exp": jnp.exp, 
+                    "conjugate": jnp.conjugate, 
+                    "Piecewise": jnp.select,
+                    # Ensure sympy.nan (identified by its string name) is mapped to jax.numpy.nan
+                    "nan": jnp.nan  
+                }
+                # Use custom mappings and the "jax" module. Removed "sympy" from this list
+                # to prioritize JAX-native translations.
+                self._pure_shape_jx_lambda = sp.lambdify(
+                    lambda_args, 
+                    self._internal_symbolic_expr_pure, 
+                    modules=[custom_jax_mappings, "jax"]
+                )
             else:
                 self._pure_shape_jx_lambda = None
 
@@ -183,94 +196,59 @@ class DriveTermSymbolic:
     def to_qiskit_signal_jax(self) -> Signal:
         if not JAX_AVAILABLE:
             raise RuntimeError("JAX not installed for to_qiskit_signal_jax")
-        if self.dt is None or self.dt <= 0:
-            raise ValueError("dt must be a positive float for to_qiskit_signal_jax sample conversion.")
-        
-        if self.pulse_type is None or self._internal_symbolic_expr_pure is None:
-            print("Warning: to_qiskit_signal_jax called without symbolic pulse_type. Falling back to numpy-based Signal.")
+
+        if self.pulse_type is None or self._internal_symbolic_expr_pure is None or self._pure_shape_jx_lambda is None:
+            print("Warning: Cannot create JAX signal directly. _pure_shape_jx_lambda not available or not a symbolic pulse. Falling back to numpy if possible.")
+            # Fallback to numpy will likely fail if called from a JIT context with tracers.
+            # For robust JAX usage, ensure pulse_type and symbolic setup are correct.
             return self.to_qiskit_signal_numpy()
 
-        ssp_duration_samples = int(round(self.duration / self.dt))
-        if ssp_duration_samples <= 0:
-            raise ValueError(
-                f"Calculated ScalableSymbolicPulse duration in samples ({ssp_duration_samples}) must be positive. "
-                f"Duration in seconds: {self.duration}, dt: {self.dt}"
-            )
+        # _ordered_shape_param_symbols are the sympy symbols for shape params (e.g., pss.square_samples_sym)
+        # self.symbolic_params maps these symbols to their values (which can be JAX tracers if duration is traced)
+        # e.g., {pss.square_samples_sym: traced_duration_sec / self.dt}
         
-        ssp_envelope_expr = self._internal_symbolic_expr_pure 
-        ssp_parameters = {sym.name: float(val) for sym, val in self.symbolic_params.items()}
-        # 1. Get the pure symbolic shape
-        pure_expr = self._internal_symbolic_expr_pure 
+        # These are the actual (potentially traced) values for the shape parameters
+        # Ensure they are JAX arrays if they might be tracers from symbolic_params
+        shape_param_traced_values = [
+            jnp.asarray(self.symbolic_params[sym]) if isinstance(self.symbolic_params[sym], (jax.core.Tracer, jnp.ndarray)) 
+            else self.symbolic_params[sym] 
+            for sym in self._ordered_shape_param_symbols
+        ]
+
+        # self._pure_shape_jx_lambda expects its first argument as time in samples,
+        # and subsequent arguments are the shape_param_traced_values.
+        # The qiskit_dynamics.Signal envelope callable receives time in seconds.
         
-        # 2. Handle Time Symbol and Scaling for the pure shape
-        pulse_spec_entry = PULSE_PARAM_SPECS[self.pulse_type]
+        # self.dt should be a concrete float here for scaling.
+        if not isinstance(self.dt, (float, int)) or self.dt <= 0:
+             raise ValueError(f"self.dt must be a positive concrete float for JAX signal conversion, got {self.dt}, type {type(self.dt)}")
 
-        time_sym_in_pure_expr = pulse_spec_entry.t_symbol # This is typically pss.t_sym (sp.Symbol('t'))
-        
-        # Ensure the time symbol is default_t_sym (sp.Symbol('t')) before scaling
-        # default_t_sym is imported from pulse_shapes_symbo as t_sym
-        if str(time_sym_in_pure_expr) != default_t_sym.name:
-            pure_expr_using_default_t = pure_expr.subs({time_sym_in_pure_expr: default_t_sym})
-        else:
-            pure_expr_using_default_t = pure_expr
+        # Ensure amplitude and envelope_angle are JAX-compatible if they could ever be traced.
+        # For now, assuming they are concrete as per typical use.
+        amp_val = jnp.asarray(self.amplitude, dtype=jnp.complex64) # qiskit-dynamics signals are complex
+        env_angle_val = jnp.asarray(self.envelope_angle, dtype=jnp.float32)
 
-        # Scale time: t_samples -> t_samples * dt. default_t_sym is the symbol for t_samples here.
-        scaled_time_pure_expr = pure_expr_using_default_t.subs({default_t_sym: default_t_sym * self.dt})
 
-        # 3. Define Qiskit Amplitude/Angle Symbols
-        q_amp_sym = sp.Symbol('amp')
-        q_angle_sym = sp.Symbol('angle')
+        def jax_envelope_callable(t_seconds_array):
+            # Convert time from seconds to samples
+            # t_seconds_array can be a JAX array if generated from a traced duration.
+            t_samples_array = t_seconds_array / self.dt
+            
+            # Call the JAX-lambdified pure shape function
+            # _pure_shape_jx_lambda(t_samples, param1, param2, ...)
+            pure_shape_values = self._pure_shape_jx_lambda(t_samples_array, *shape_param_traced_values)
+            
+            # Apply complex amplitude and phase
+            # Ensure pure_shape_values is complex before multiplication if not already
+            if not jnp.issubdtype(pure_shape_values.dtype, jnp.complexfloating):
+                pure_shape_values = pure_shape_values.astype(jnp.complex64)
 
-        # 4. Construct Full Qiskit Envelope, now including symbolic amp and angle
-        # scaled_time_pure_expr is the f(t_samples*dt, shape_params_seconds)
-        qiskit_ssp_envelope = q_amp_sym * sp.exp(sp.I * q_angle_sym) * scaled_time_pure_expr
-        
-        # 5. Populate Parameters Dictionary
-        # Start with shape-specific parameters (values in seconds)
-        ssp_parameters = {sym.name: float(val) for sym, val in self.symbolic_params.items()}
-        # Add values for the new amp and angle symbols
-        # ssp_parameters[q_amp_sym.name] = self.amplitude
-        # ssp_parameters[q_angle_sym.name] = self.envelope_angle
+            complex_amp_factor = amp_val * jnp.exp(1j * env_angle_val)
+            return complex_amp_factor * pure_shape_values
 
-        # 6. Instantiate ScalableSymbolicPulse
-        this_pulse_instance = pulse.ScalableSymbolicPulse(
-            pulse_type=self.pulse_id or f"{self.pulse_type}_ssp",
-            duration=ssp_duration_samples,
-            amp=self.amplitude,
-            angle=self.envelope_angle, 
-            parameters=ssp_parameters,
-            envelope=qiskit_ssp_envelope,
-            name=self.pulse_id or f"{self.pulse_type}_ssp_pulse"
+        return Signal(
+            envelope=jax_envelope_callable,
+            carrier_freq=self.modulation_freq, # This should be a concrete float
+            phase=self.phi,                   # This should be a concrete float
+            name=self.pulse_id or f"{self.pulse_type}_direct_jax_signal"
         )
-        
-        channel_index = 0 
-        if isinstance(self.qiskit_channel, str) and self.qiskit_channel.lower().startswith('d'):
-            try:
-                channel_index = int(self.qiskit_channel[1:])
-            except ValueError:
-                print(f"Warning: Could not parse channel index from qiskit_channel '{self.qiskit_channel}'. Defaulting to 0.")
-        elif isinstance(self.qiskit_channel, int):
-            channel_index = channel_index
-
-        schedule_name = self.pulse_id or f"{self.pulse_type}_schedule"
-        with pulse.build(name=schedule_name) as schedule_final:
-            pulse.play(this_pulse_instance, pulse.DriveChannel(channel_index))
-        
-        q_channel_str_key = self.qiskit_channel if isinstance(self.qiskit_channel, str) else f"d{self.qiskit_channel}"
-        converter = InstructionToSignals(
-            dt=self.dt,
-            carriers={q_channel_str_key: self.modulation_freq}
-        )
-        
-        signals = converter.get_signals(schedule_final)
-        if not signals:
-            raise ValueError("No signals generated by InstructionToSignals.")
-        
-        final_signal = signals[0]
-        if not isinstance(final_signal, Signal):
-             raise TypeError(f"Generated signal is not a Qiskit Dynamics Signal. Type: {type(final_signal)}")
-
-        final_signal.carrier_freq = self.modulation_freq
-        final_signal.phase = self.phi
-        
-        return final_signal
