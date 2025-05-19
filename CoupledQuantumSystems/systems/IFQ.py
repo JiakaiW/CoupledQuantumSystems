@@ -10,7 +10,7 @@ import scqubits
 
 from ..dynamics import *
 from ..utils import *
-from . import QuantumSystem
+from .systems import QuantumSystem
 
 class gfIFQ(QuantumSystem):
     """Fluxonium qubit implementation with additional analysis capabilities.

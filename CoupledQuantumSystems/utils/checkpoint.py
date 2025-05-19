@@ -11,17 +11,27 @@ import os
 import inspect
 import sys
 from ..dynamics import DriveTerm
+from typing import List, Optional, TYPE_CHECKING, Any
 
 try:
     import dynamiqs as dq
     from dynamiqs.time_qarray import CallableTimeQArray
     import jax.numpy as jnp
+    if TYPE_CHECKING:
+        from dynamiqs.result import Result as DynamiqsResult
     JAX_AVAILABLE = True
 except ImportError:
     JAX_AVAILABLE = False
     dq = None
     CallableTimeQArray = None
     jnp = None
+    if TYPE_CHECKING:
+        DynamiqsResult = Any
+        DynamiqsMethod = Any
+        DynamiqsQArray = Any
+    else:
+        DynamiqsMethod = None
+        DynamiqsQArray = None
 
 class Checkpoint:
     """Stores the state of a quantum system evolution.
@@ -44,11 +54,11 @@ class Checkpoint:
         self.next_t_idx = 0
         self.qt_result = qutip.solver.Result()
 
-    def convert_from_dq_result(self, dq_result: dq.result.Result):
+    def convert_from_dq_result(self, dq_result: 'DynamiqsResult'):
         """Convert a dynamiqs result to QuTiP format and store it.
 
         Args:
-            dq_result (dq.result.Result): Dynamiqs evolution result to convert.
+            dq_result (DynamiqsResult): Dynamiqs evolution result to convert.
 
         Note:
             This method sets the solver name to 'dynamiqs' and converts all
@@ -60,12 +70,12 @@ class Checkpoint:
         self.qt_result.states = dq.to_qutip(dq_result.states)
         self.next_t_idx = len(dq_result.tsave)-1
 
-    def concatenate_with_new_dq_result_segment(self, dq_result: dq.result.Result):
+    def concatenate_with_new_dq_result_segment(self, dq_result: 'DynamiqsResult'):
         """Concatenate a new evolution segment to the existing checkpoint. We assume the first recorded time step in this new segment is not the last recorded time step in the previous segment, 
         (setting  t_save[0] = t0 + dt, where dq.Options(t0 = dq_result.tsave[0])
 
         Args:
-            dq_result (dq.result.Result): New evolution segment to append.
+            dq_result ('DynamiqsResult'): New evolution segment to append.
 
         Note:
             This method assumes the first time step in the new segment is
@@ -133,13 +143,13 @@ class CheckpointingJob:
             print('No checkpoint loaded, starting from t_idx = 0')
 
     def set_system(self,
-                static_hamiltonian: dq.QArray,
+                static_hamiltonian: 'DynamiqsQArray',
                 drive_terms: list[DriveTerm],
-                rho0: dq.QArray,
-                tsave: jnp.ndarray,
-                jump_ops: list[dq.QArray],
-                exp_ops: list[dq.QArray],
-                method: dq.method.Method = dq.method.Tsit5(max_steps=int(1e9)),
+                rho0: 'DynamiqsQArray',
+                tsave: 'jnp.ndarray',
+                jump_ops: list['DynamiqsQArray'],
+                exp_ops: list['DynamiqsQArray'],
+                method: Optional['DynamiqsMethod'] = None,
                 len_t_segment_per_chunk: int = 5):
         """Set up the quantum system for evolution.
 
@@ -151,7 +161,7 @@ class CheckpointingJob:
             jump_ops (list[dq.QArray]): List of jump operators for the master equation.
             exp_ops (list[dq.QArray]): List of operators for expectation values.
             method (dq.method.Method, optional): Integration method to use.
-                Defaults to Tsit5 with max_steps=1e9.
+                If None, defaults to Tsit5 with max_steps=1e9.
             len_t_segment_per_chunk (int, optional): Length of each evolution segment.
                 Defaults to 5.
 
@@ -160,6 +170,14 @@ class CheckpointingJob:
             as multiple jump operators would require batching which is not
             supported in this implementation.
         """
+        if not JAX_AVAILABLE:
+            raise ImportError("JAX and dynamiqs are required for checkpoint functionality. Please install them.")
+
+        if method is None:
+            self.method = dq.method.Tsit5(max_steps=int(1e9))
+        else:
+            self.method = method
+            
         assert len(jump_ops) == 0 or len(jump_ops) == 1, "len(jump_ops)>1 lead to batching, not supported here"
         self.static_hamiltonian = static_hamiltonian
         self.drive_terms = drive_terms
@@ -167,7 +185,6 @@ class CheckpointingJob:
         self.tsave = tsave
         self.jump_ops = jump_ops
         self.exp_ops = exp_ops
-        self.method = method
         self.len_t_segment_per_chunk = len_t_segment_per_chunk
 
     def run_segment(self):

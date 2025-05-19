@@ -1,14 +1,17 @@
 import concurrent
-from typing import List, Any
+from typing import List, Any, TYPE_CHECKING
 from loky import get_reusable_executor
-from ..systems import QuantumSystem
+# from ..systems import QuantumSystem
 from .drive import *
 from ..utils import pad_back_custom,dressed_to_2_level_dm
 from .evo import ODEsolve_and_post_process, post_process
 from tqdm import tqdm
 
+if TYPE_CHECKING:
+    from ..systems import QuantumSystem
+
 def run_parallel_ODEsolve_and_post_process_jobs_with_different_systems(
-        list_of_systems: List[QuantumSystem],
+        list_of_systems: List['QuantumSystem'],
         list_of_kwargs: list[Any],
         max_workers = None,
         store_states = True,
