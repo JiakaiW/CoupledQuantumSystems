@@ -16,6 +16,7 @@ def ODEsolve_and_post_process(
 
             store_states = True,
             method:str = 'qutip.mesolve',
+            qiskit_solver_method: Optional[str] = None,
             post_processing_funcs:List=[],
             post_processing_args:List=[],
 
@@ -94,25 +95,43 @@ def ODEsolve_and_post_process(
             else:
                 # New DriveTermSymbolic type
                 if JAX_AVAILABLE:
+                    if print_progress: print("JAX is available, using to_qiskit_signal_jax.") # More informative print
                     signals.append(drive_term.to_qiskit_signal_jax())
                 else:
+                    if print_progress: print("JAX is not available, using to_qiskit_signal_numpy.")
                     signals.append(drive_term.to_qiskit_signal_numpy())
-        results_qiskit_dynamics = qiskit_solver.solve(t_span=[tlist[0], tlist[-1]],
-                                                      t_eval = tlist, 
-                                                      y0=y0.full(), 
-                                                      signals=signals, 
-                                                      atol=1e-10, 
-                                                      rtol=1e-10)
+        
+        # Pass qiskit_solver_method to the solve call if provided
+        solve_kwargs = {
+            't_span': [tlist[0], tlist[-1]],
+            't_eval': tlist,
+            'y0': y0.full(),
+            'signals': signals,
+            'atol': 1e-10, # Default from before, can be parameterized
+            'rtol': 1e-10  # Default from before, can be parameterized
+        }
+        if qiskit_solver_method:
+            solve_kwargs['method'] = qiskit_solver_method
+            
+        results_qiskit_dynamics = qiskit_solver.solve(**solve_kwargs)
+        results_qiskit_dynamics_y_array = np.array(results_qiskit_dynamics.y)
+        # Convert results to QuTiP Result object format
+        qobj_states = [qutip.Qobj(state) for state in results_qiskit_dynamics_y_array] # Let qutip figure out the dims automatically
+        calculated_expect = []
+        if e_ops:
+            for op in e_ops:
+                calculated_expect.append(np.array([qutip.expect(op, st) for st in qobj_states]))
+        
+        # num_collapse is 0 because this is not mcsolve
+        # Create a minimal Result object first, then populate it to avoid constructor issues.
         result = qutip.solver.Result()
+        result.states = qobj_states
         result.times = tlist
-        result.states = [qutip.Qobj(state) for state in results_qiskit_dynamics.y]
-        if e_ops is not None:
-            result.expect = np.array([
-                [qutip.expect(e_op, state) for state in result.states] for e_op in e_ops
-            ])
-        else:
-            result.expect = None
-        result.solver = 'qiskit_dynamics'
+        result.expect = calculated_expect
+        result.num_expect = len(e_ops) if e_ops else 0
+        result.num_collapse = 0
+        result.options = qutip.Options()
+        result.solver = 'qiskit_dynamics (via ODEsolve_and_post_process)'
 
     elif method =='dynamiqs':
         raise NotImplementedError("dynamiqs is not implemented yet")

@@ -11,21 +11,24 @@ from typing import Dict, Tuple, List, Optional, Set
 from dataclasses import dataclass, field
 import inspect
 
+# Special symbols used by Qiskit's ScalableSymbolicPulse
+QISKIT_SPECIAL_SYMBOLS = {'t', 'duration', 'amp', 'angle'}
+
 # Common symbols used across pulse shapes
 t = sp.symbols('t', real=True)
-amp = sp.symbols('amp', real=True)
-t_start = sp.symbols('t_start', real=True)
-t_duration = sp.symbols('t_duration', real=True)
-t_rise = sp.symbols('t_rise', real=True)
-t_square = sp.symbols('t_square', real=True)
-t_stop = sp.symbols('t_stop', real=True)
-amp_correction = sp.symbols('amp_correction', real=True)
+# amp = sp.symbols('amp', real=True) # Amplitude will be handled by DriveTermSymbolic
+start = sp.symbols('start', real=True)
+length = sp.symbols('length', real=True)
+rise = sp.symbols('rise', real=True)
+square = sp.symbols('square', real=True)
+stop = sp.symbols('stop', real=True)
+amp_correction = sp.symbols('amp_correction', real=True) # For DRAG, relative coefficient
 how_many_sigma = sp.symbols('how_many_sigma', real=True)
-stoke = sp.symbols('stoke', real=True)
+stoke = sp.symbols('stoke', real=True) # Boolean or indicator for STIRAP
 delta1 = sp.symbols('delta1', real=True)
 delta2 = sp.symbols('delta2', real=True)
-phi = sp.symbols('phi', real=True)
-normalize = sp.symbols('normalize', real=True)
+# phi = sp.symbols('phi', real=True) # Envelope phase will be handled by DriveTermSymbolic
+normalize = sp.symbols('normalize', real=True) # Boolean
 
 @dataclass
 class PulseParameters:
@@ -36,6 +39,13 @@ class PulseParameters:
     2. All optional parameters with defaults are actually used in the expression
     3. No extra parameters are provided that aren't used
     4. Clear error messages are provided when validation fails
+    
+    Note: The following symbols are treated specially and don't need to be documented:
+    - 't': The time variable
+    The following are handled by DriveTermSymbolic directly:
+    - 'amp': Pulse amplitude
+    - 'duration': Overall pulse duration for Qiskit
+    - 'angle': Overall envelope phase for Qiskit
     """
     required_params: List[str]
     optional_params: Dict[str, float] = field(default_factory=dict)
@@ -50,31 +60,45 @@ class PulseParameters:
         Raises:
             ValueError: If validation fails, with a clear error message
         """
-        # Get all symbols used in the expression
-        used_symbols = {str(sym) for sym in expr.free_symbols}
+        # Get all symbols used in the expression by their string name
+        symbols_in_expr_str = {str(sym) for sym in expr.free_symbols}
         
-        # Check required parameters
-        missing_required = set(self.required_params) - used_symbols
+        # Check required parameters: they must be present in the expression's free symbols.
+        missing_required = set(self.required_params) - symbols_in_expr_str
         if missing_required:
             raise ValueError(
-                f"Required parameters {missing_required} are not used in the expression. "
-                f"Either remove them from required_params or add them to the expression."
+                f"Required parameters {sorted(list(missing_required))} are not used in the symbolic expression. "
+                f"Symbols found in expression: {sorted(list(symbols_in_expr_str))}. "
+                f"Expression: {expr}. "
+                f"Please ensure these required parameters are part of the expression, or remove them from required_params."
             )
         
-        # Check optional parameters
-        unused_optional = set(self.optional_params.keys()) - used_symbols
-        if unused_optional:
-            raise ValueError(
-                f"Optional parameters {unused_optional} are not used in the expression. "
-                f"Either remove them from optional_params or add them to the expression."
-            )
+        symbols_needing_check = symbols_in_expr_str - {'t'}
+        documented_as_param_by_user = set(self.required_params) | set(self.optional_params.keys())
         
-        # Check for extra symbols not documented
-        extra_symbols = used_symbols - set(self.required_params) - set(self.optional_params.keys())
+        # Qiskit special symbols that are NOT 't' and also NOT primary DriveTermSymbolic attributes handled outside shape
+        # For example, if a shape internally uses a symbol named 'duration' for a sub-component, it's fine.
+        # But 'amp', 'duration' (overall), 'angle' (overall) are not expected to be shape params anymore.
+        other_qiskit_special_symbols = QISKIT_SPECIAL_SYMBOLS - {'t', 'amp', 'duration', 'angle'}
+        
+        extra_symbols = symbols_needing_check - documented_as_param_by_user - other_qiskit_special_symbols
+        
         if extra_symbols:
+            # Check if any of these extra symbols are the now-externalized DriveTermSymbolic attributes
+            externalized_attrs = {'amp', 'angle'} # 'duration' is less likely to be a free symbol in a pure shape expr
+            improperly_used_external = extra_symbols & externalized_attrs
+            if improperly_used_external:
+                raise ValueError(
+                    f"Symbols {sorted(list(improperly_used_external))} (e.g., 'amp', 'angle') are used in the expression "
+                    f"but should be handled by DriveTermSymbolic directly, not as shape parameters. "
+                    f"Expression: {expr}."
+                )
+
             raise ValueError(
-                f"Symbols {extra_symbols} are used in the expression but not documented. "
-                f"Either add them to required_params or optional_params, or remove them from the expression."
+                f"Symbols {sorted(list(extra_symbols))} are used in the expression but not documented as required or optional parameters. "
+                f"Documented parameters by user: {sorted(list(documented_as_param_by_user))}. "
+                f"Expression: {expr}. "
+                f"Please add them to required_params or optional_params, or ensure they are standard Qiskit symbols if intended."
             )
 
 def validate_pulse_definition(func):
@@ -82,7 +106,7 @@ def validate_pulse_definition(func):
     
     This decorator ensures that:
     1. The function returns a tuple of (expr, defaults, params)
-    2. The params match the expression
+    2. The params match the expression (excluding 't' and primary DriveTermSymbolic attributes like 'amp', 'duration', 'angle')
     3. The defaults match the optional_params
     """
     def wrapper(*args, **kwargs):
@@ -93,84 +117,88 @@ def validate_pulse_definition(func):
                 f"Got {type(result)} with length {len(result) if isinstance(result, tuple) else 'N/A'}"
             )
         
-        expr, defaults, params = result
-        if not isinstance(params, PulseParameters):
+        expr, defaults, params_obj = result # Renamed params to params_obj to avoid conflict
+        if not isinstance(params_obj, PulseParameters):
             raise ValueError(
                 f"Pulse definition {func.__name__} must return PulseParameters as third element. "
-                f"Got {type(params)}"
+                f"Got {type(params_obj)}"
             )
         
-        # Validate params against expression
-        params.validate_against_expr(expr)
+        params_obj.validate_against_expr(expr)
         
-        # Validate defaults match optional_params
-        default_symbols = {str(sym) for sym in defaults.keys()}
-        optional_symbols = set(params.optional_params.keys())
+        default_symbols = {str(sym) for sym in defaults.keys() 
+                          if str(sym) not in (QISKIT_SPECIAL_SYMBOLS | {'amp', 'angle'})} # Exclude amp, angle as well
+        optional_symbols = set(params_obj.optional_params.keys())
         if default_symbols != optional_symbols:
-            raise ValueError(
-                f"Defaults in {func.__name__} don't match optional_params. "
-                f"Defaults: {default_symbols}, Optional: {optional_symbols}"
-            )
-        
+            # Allow optional_params to not be in defaults if their default is implicitly handled (e.g. 0 or specific sympy obj)
+            # However, all keys in defaults MUST be in optional_params
+            missing_in_optional = default_symbols - optional_symbols
+            if missing_in_optional:
+                raise ValueError(
+                    f"Defaults in {func.__name__} contains keys {missing_in_optional} not in optional_params. "
+                    f"Defaults: {default_symbols}, Optional: {optional_symbols}"
+                )
+            # And all optional_params should ideally have a default if not required
+            # This part is more about good practice for defining defaults.
+            # For now, ensure defaults.keys() is a subset of optional_params.keys()
+            if not default_symbols.issubset(optional_symbols):
+                 raise ValueError(
+                    f"Defaults keys in {func.__name__} must be a subset of optional_params keys. "
+                    f"Default keys: {default_symbols}, Optional keys: {optional_symbols}"
+                )
+
+
         return result
     return wrapper
 
 @validate_pulse_definition
 def square_pulse_with_rise_fall() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a square pulse with rise and fall times."""
-    t_fall_start = t_start + t_rise + t_square
-    t_end = t_fall_start + t_rise
+    """Symbolic definition of a square pulse envelope with rise and fall times.
+    The envelope is unscaled (peak amplitude of 1 for the square part)."""
+    t_fall_start = start + rise + square
+    end_time = t_fall_start + rise # Renamed 'end' to 'end_time' to avoid conflict
     
-    # Define the three regions
     rise_window = sp.Piecewise(
-        (1, (t >= t_start) & (t <= t_start + t_rise)),
+        (1, (t >= start) & (t <= start + rise)),
         (0, True)
     )
-    square_window = sp.Piecewise(
-        (1, (t >= t_start + t_rise) & (t <= t_fall_start)),
+    square_window_val = sp.Piecewise( # Renamed 'square_window' to 'square_window_val'
+        (1, (t >= start + rise) & (t <= t_fall_start)),
         (0, True)
     )
     fall_window = sp.Piecewise(
-        (1, (t >= t_fall_start) & (t <= t_end)),
+        (1, (t >= t_fall_start) & (t <= end_time)),
         (0, True)
     )
     
-    # Define the envelope
-    rise_envelope = rise_window * sp.sin(sp.pi * (t - t_start) / (2 * t_rise)) ** 2
-    square_envelope = square_window
-    fall_envelope = fall_window * sp.sin(sp.pi * (t_end - t) / (2 * t_rise)) ** 2
+    rise_envelope = rise_window * sp.sin(sp.pi * (t - start) / (2 * rise)) ** 2
+    square_envelope_val = square_window_val # Renamed 'square_envelope' to 'square_envelope_val'
+    fall_envelope = fall_window * sp.sin(sp.pi * (end_time - t) / (2 * rise)) ** 2
     
-    envelope = 2 * sp.pi * amp * (square_envelope + rise_envelope + fall_envelope)
+    envelope = (square_envelope_val + rise_envelope + fall_envelope)
     
-    # Default values
     defaults = {
-        t_start: 0,
-        t_rise: 1e-13,
-        t_square: 0
+        start: 0.0,
+        rise: 1e-13,
+        square: 0.0
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp'],
+        required_params=[], # No 'amp'
         optional_params={
-            't_start': 0,
-            't_rise': 1e-13,
-            't_square': 0
+            'start': 0.0,
+            'rise': 1e-13,
+            'square': 0.0
         },
-        docstring="""Square pulse with rise and fall times.
-        
-        Required parameters:
-        -------------------
-        amp: float
-            Amplitude of the pulse
+        docstring="""Square pulse shape with rise and fall times. Peak is 1.
             
         Optional parameters:
         -------------------
-        t_start: float
+        start: float
             Start time of the pulse (default: 0)
-        t_rise: float
-            Rise time in seconds (default: 1e-13)
-        t_square: float
+        rise: float
+            Rise time in seconds (default: 1e-13). Must be > 0 if used.
+        square: float
             Duration of constant amplitude (default: 0)
         """
     )
@@ -179,39 +207,36 @@ def square_pulse_with_rise_fall() -> Tuple[sp.Expr, Dict[sp.Symbol, float], Puls
 
 @validate_pulse_definition
 def sin_squared_pulse() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a sin-squared pulse."""
-    t_end = t_start + t_duration
+    """Symbolic definition of a sin-squared pulse envelope.
+    The envelope is unscaled (peak amplitude of 1)."""
+    end_time = start + length # Renamed 'end' to 'end_time'
     
     inside_window = sp.Piecewise(
-        (1, (t >= t_start) & (t <= t_end)),
+        (1, (t >= start) & (t <= end_time)),
         (0, True)
     )
     
-    envelope = 2 * sp.pi * amp * inside_window * sp.sin(sp.pi * (t - t_start) / t_duration) ** 2
+    envelope = inside_window * sp.sin(sp.pi * (t - start) / length) ** 2
     
-    # Default values
     defaults = {
-        t_start: 0
+        start: 0.0
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp', 't_duration'],
+        required_params=['length'], # No 'amp'
         optional_params={
-            't_start': 0
+            'start': 0.0
         },
-        docstring="""Sin-squared pulse.
+        docstring="""Sin-squared pulse shape. Peak is 1.
         
         Required parameters:
         -------------------
-        amp: float
-            Amplitude of the pulse
-        t_duration: float
-            Duration of the pulse in seconds
+        length: float
+            Duration of the pulse in seconds. Must be > 0.
             
         Optional parameters:
         -------------------
-        t_start: float
+        start: float
             Start time of the pulse (default: 0)
         """
     )
@@ -220,44 +245,47 @@ def sin_squared_pulse() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameter
 
 @validate_pulse_definition
 def sin_squared_DRAG() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a sin-squared DRAG pulse."""
-    t_end = t_start + t_duration
+    """Symbolic definition of a sin-squared DRAG pulse envelope.
+    The main envelope component is unscaled (peak amplitude of 1).
+    'amp_correction' is the coefficient for the derivative term."""
+    end_time = start + length # Renamed 'end' to 'end_time'
     
     inside_window = sp.Piecewise(
-        (1, (t >= t_start) & (t <= t_end)),
+        (1, (t >= start) & (t <= end_time)),
         (0, True)
     )
     
-    envelope = inside_window * sp.sin(sp.pi * (t - t_start) / t_duration) ** 2
-    envelope_derivative = inside_window * (sp.pi/t_duration) * sp.sin(2 * sp.pi * (t - t_start) / t_duration)
+    main_envelope = inside_window * sp.sin(sp.pi * (t - start) / length) ** 2
+    derivative_envelope = inside_window * (sp.pi/length) * sp.sin(2 * sp.pi * (t - start) / length)
     
-    complex_envelope = 2 * sp.pi * (amp * envelope - sp.I * amp_correction * envelope_derivative)
+    # amp_correction is the coefficient beta in E(t) * (1 - i * beta * E_dot(t) / E(t))
+    # Here, E(t) is main_envelope, E_dot(t) is derivative_envelope.
+    # If ScalableSymbolicPulse applies A * exp(i*phi) * envelope_expr,
+    # and envelope_expr is (main_envelope - I * amp_correction * derivative_envelope),
+    # then amp_correction is indeed the beta.
+    complex_envelope = (main_envelope - sp.I * amp_correction * derivative_envelope)
     
-    # Default values
     defaults = {
-        t_start: 0
+        start: 0.0
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp', 'amp_correction', 't_duration'],
+        required_params=['length', 'amp_correction'], # No 'amp'
         optional_params={
-            't_start': 0
+            'start': 0.0
         },
-        docstring="""Sin-squared DRAG pulse.
+        docstring="""Sin-squared DRAG pulse shape. Main component peak is 1.
         
         Required parameters:
         -------------------
-        amp: float
-            Amplitude of the pulse
+        length: float
+            Duration of the pulse in seconds. Must be > 0.
         amp_correction: float
-            Amplitude correction for DRAG
-        t_duration: float
-            Duration of the pulse in seconds
+            DRAG coefficient (beta) for the derivative term.
             
         Optional parameters:
         -------------------
-        t_start: float
+        start: float
             Start time of the pulse (default: 0)
         """
     )
@@ -266,170 +294,213 @@ def sin_squared_DRAG() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters
 
 @validate_pulse_definition
 def gaussian_pulse() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a Gaussian pulse."""
-    sigma = t_duration/how_many_sigma
-    t_center = t_start + t_duration / 2
+    """Symbolic definition of a Gaussian pulse envelope.
+    Unscaled before normalization (based on exp function).
+    If normalized=True, peak is 1 (after windowing and shifting)."""
+    sigma = length / how_many_sigma
+    t_center = start + length / 2
     
-    gaussian = amp * sp.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
+    # Pure Gaussian shape, peak is 1 at t_center if not windowed
+    gaussian_shape = sp.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
     
-    t_end = t_start + t_duration
+    end_time = start + length # Renamed 'end' to 'end_time'
     inside_window = sp.Piecewise(
-        (1, (t >= t_start) & (t <= t_end)),
+        (1, (t >= start) & (t <= end_time)),
         (0, True)
     )
     
-    envelope = inside_window * gaussian
+    windowed_gaussian = inside_window * gaussian_shape
     
-    # Add normalization if requested
-    a = gaussian.subs(t, t_start)
-    normalized_envelope = sp.Piecewise(
-        ((envelope - a)/(1 - a), normalize),
-        (envelope, True)
+    # Normalization logic (lifted Gaussian)
+    val_at_start = gaussian_shape.subs(t, start) # Value of pure shape at window start
+    
+    # If normalize=True, make it (G(t)-G(start))/(1-G(start)) within window
+    # If normalize=False, just use G(t) within window
+    # The '1' in (1-a) assumes peak of pure gaussian is 1.
+    # For G(t) = exp(-...), max is 1. G(start) < 1. So (1-a) is positive.
+    envelope = sp.Piecewise(
+        (((windowed_gaussian - val_at_start * inside_window) / (1 - val_at_start)), normalize),
+        (windowed_gaussian, True) # Default to non-normalized if normalize is False
     )
-    
-    final_envelope = 2 * sp.pi * normalized_envelope
-    
-    # Default values
+        
     defaults = {
-        t_start: 0,
-        how_many_sigma: 6,
-        normalize: False
+        start: 0.0,
+        how_many_sigma: 6.0,
+        normalize: False 
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp', 't_duration'],
+        required_params=['length'], # No 'amp'
         optional_params={
-            't_start': 0,
-            'how_many_sigma': 6,
+            'start': 0.0,
+            'how_many_sigma': 6.0,
             'normalize': False
         },
-        docstring="""Gaussian pulse.
+        docstring="""Gaussian pulse shape.
+        If normalize=False, it's a windowed Gaussian (peak of exp is 1).
+        If normalize=True, it's a lifted Gaussian (starts at 0, peak is 1).
         
         Required parameters:
         -------------------
-        amp: float
-            Amplitude of the pulse
-        t_duration: float
-            Duration of the pulse in seconds
+        length: float
+            Duration of the pulse window in seconds. Sigma is derived from this. Must be > 0.
             
         Optional parameters:
         -------------------
-        t_start: float
-            Start time of the pulse (default: 0)
+        start: float
+            Start time of the pulse window (default: 0)
         how_many_sigma: float
-            Number of standard deviations to include (default: 6)
+            Defines sigma = length / how_many_sigma (default: 6.0). Must be > 0.
         normalize: bool
-            Whether to normalize the pulse (default: False)
+            Whether to apply lifted normalization (default: False).
         """
     )
     
-    return final_envelope, defaults, params
+    return envelope, defaults, params
 
 @validate_pulse_definition
 def gaussian_DRAG() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a Gaussian DRAG pulse."""
-    sigma = t_duration/how_many_sigma
-    t_center = t_start + t_duration / 2
+    """Symbolic definition of a Gaussian DRAG pulse envelope.
+    Main Gaussian component unscaled/normalized as in gaussian_pulse.
+    'amp_correction' is the coefficient for the derivative term."""
+    sigma = length / how_many_sigma
+    t_center = start + length / 2
     
-    gaussian = amp * sp.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
+    gaussian_shape = sp.exp(-((t - t_center) ** 2) / (2 * sigma ** 2))
     
-    t_end = t_start + t_duration
+    end_time = start + length # Renamed 'end' to 'end_time'
     inside_window = sp.Piecewise(
-        (1, (t >= t_start) & (t <= t_end)),
+        (1, (t >= start) & (t <= end_time)),
         (0, True)
     )
+    windowed_gaussian = inside_window * gaussian_shape
+    val_at_start = gaussian_shape.subs(t, start)
     
-    envelope = inside_window * gaussian
-    
-    # Add normalization if requested
-    a = gaussian.subs(t, t_start)
-    normalized_envelope = sp.Piecewise(
-        ((envelope - a)/(1 - a), normalize),
-        (envelope, True)
+    main_envelope = sp.Piecewise(
+        (((windowed_gaussian - val_at_start * inside_window) / (1 - val_at_start)), normalize),
+        (windowed_gaussian, True)
     )
     
-    drag_correction = 1 + sp.I * amp_correction * (-(t - t_center)/sigma**2)
-    final_envelope = 2 * sp.pi * drag_correction * normalized_envelope
+    # Derivative of the pure (unwindowed, unnormalized) Gaussian shape for DRAG
+    # d/dt exp(- (t-c)^2 / (2s^2) ) = exp(- (t-c)^2 / (2s^2) ) * (-(t-c)/s^2)
+    # The derivative should be of the main_envelope that is actually used.
+    # If main_envelope is normalized, derivative of normalized form is complex.
+    # Standard DRAG: Envelope_I + i * beta * d/dt(Envelope_I)
+    # Let Envelope_I be main_envelope. We need its derivative.
+    # For simplicity, Qiskit often uses derivative of symbolic pulse.
+    # Let's use derivative of the 'windowed_gaussian' before normalization for DRAG part,
+    # as amp_correction is often calibrated against the fundamental Gaussian parameters.
+    # derivative_term_shape = gaussian_shape * (-(t - t_center)/sigma**2) # Derivative of pure gaussian
+    # windowed_derivative = inside_window * derivative_term_shape
+    # This is tricky: if main_envelope is normalized, derivative part should also be consistent.
+    # Let's assume amp_correction applies to derivative of the *final* main_envelope.
+    # Sympy can compute derivative of main_envelope directly.
     
-    # Default values
+    derivative_of_main_envelope = sp.diff(main_envelope, t)
+
+    # The drag_correction from the original user code was:
+    # drag_correction = 1 + sp.I * amp_correction * (-(t - t_center)/sigma**2)
+    # This implies the Q component is amp_correction * (-(t-c)/s^2) * main_gaussian_component
+    # which is amp_correction * (-1/amp) * d/dt(amp * gaussian_shape) if amp was part of gaussian_shape.
+    # Now that gaussian_shape is pure, derivative_of_pure_gaussian = gaussian_shape * (-(t-c)/s^2)
+    # So Q component: amp_correction * derivative_of_pure_gaussian * inside_window (if not normalized)
+    # This is more standard for DRAG where correction is related to anharm and sigma.
+    
+    # Let's use the common DRAG form: G(t) + i * beta * G_dot(t)
+    # where G(t) is the main_envelope (potentially normalized)
+    # and G_dot(t) is its derivative. 'amp_correction' is beta.
+    
+    complex_envelope = main_envelope + sp.I * amp_correction * derivative_of_main_envelope
+    
     defaults = {
-        t_start: 0,
-        how_many_sigma: 6,
+        start: 0.0,
+        how_many_sigma: 6.0,
         normalize: False
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp', 'amp_correction', 't_duration'],
+        required_params=['length', 'amp_correction'], # No 'amp'
         optional_params={
-            't_start': 0,
-            'how_many_sigma': 6,
+            'start': 0.0,
+            'how_many_sigma': 6.0,
             'normalize': False
         },
-        docstring="""Gaussian DRAG pulse.
+        docstring="""Gaussian DRAG pulse shape.
+        Main Gaussian component as per gaussian_pulse.
+        'amp_correction' is the DRAG coefficient (beta).
         
         Required parameters:
         -------------------
-        amp: float
-            Amplitude of the pulse
+        length: float
+            Duration of the pulse window. Sigma derived from this. Must be > 0.
         amp_correction: float
-            Amplitude correction for DRAG
-        t_duration: float
-            Duration of the pulse in seconds
+            DRAG coefficient (beta).
             
         Optional parameters:
         -------------------
-        t_start: float
-            Start time of the pulse (default: 0)
+        start: float
+            Start time of the pulse window (default: 0)
         how_many_sigma: float
-            Number of standard deviations to include (default: 6)
+            Defines sigma = length / how_many_sigma (default: 6.0). Must be > 0.
         normalize: bool
-            Whether to normalize the pulse (default: False)
+            Whether to apply lifted normalization to main Gaussian component (default: False).
         """
     )
     
-    return final_envelope, defaults, params
+    return complex_envelope, defaults, params
 
 @validate_pulse_definition
 def STIRAP_stoke() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a STIRAP stoke pulse."""
-    lambda_val = 4
-    tau_for_mono = (t_stop - t_start) / 6
-    center = (t_stop - t_start) / 2 + t_start
+    """Symbolic definition of a STIRAP stoke pulse envelope.
+    Unscaled (based on exp and trig functions, normalized form)."""
+    lambda_val = sp.Float(4.0) # Ensure sympy float
+    tau_for_mono = (stop - start) / sp.Float(6.0)
+    center = (stop - start) / sp.Float(2.0) + start
     
-    mono_increasing = 1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono))
-    
-    T0 = 2 * tau_for_mono
-    hyper_Gaussian = sp.exp(-((t - center) / T0) ** (2*3))
-    
-    a = hyper_Gaussian.subs(t, t_start)
-    
-    envelope = (hyper_Gaussian - a)/(1-a) * sp.cos(sp.pi/2 * mono_increasing) * 2 * sp.pi * amp
+    # mono_increasing can be negative if t < center for exp argument
+    mono_increasing = sp.Function('mono_increasing')
+    try:
+        mono_increasing_expr = 1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono))
+    except OverflowError: # Should not happen with symbolic
+        mono_increasing_expr = sp.Rational(1,2) # Fallback, though symbolic should handle
 
-    # Default values
+    hyper_Gaussian_exponent = -((t - center) / (2 * tau_for_mono)) ** sp.Integer(6)
+    hyper_Gaussian = sp.exp(hyper_Gaussian_exponent)
+    
+    val_at_start = hyper_Gaussian.subs(t, start) # Value of pure shape at window start
+    
+    # Normalized hyper-Gaussian part
+    # Ensure (1-a) is not zero; for hypergaussian this should be fine if stop > start
+    # Using sp.Max to avoid division by zero if val_at_start is very close to 1 (though unlikely for typical STIRAP)
+    #denominator = sp.Max(1 - val_at_start, 1e-9) # Avoid instability if val_at_start is 1
+    # A simpler assumption: 1-val_at_start won't be zero for valid params.
+    normalized_hyper_G = (hyper_Gaussian - val_at_start) / (1 - val_at_start)
+    
+    # Stoke pulse uses cos part of the mixing angle
+    # envelope = normalized_hyper_G * sp.cos(sp.pi/2 * mono_increasing_expr) # old symbolic function call
+    envelope = normalized_hyper_G * sp.cos(sp.pi/2 * (1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono))))
+
+
     defaults = {
-        t_start: 0
+        start: 0.0
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp', 't_stop'],
+        required_params=['stop'], # No 'amp'
         optional_params={
-            't_start': 0
+            'start': 0.0
         },
-        docstring="""STIRAP stoke pulse.
+        docstring="""STIRAP stoke pulse shape (normalized).
+        Based on hyper-Gaussian and sinusoidal mixing angle.
         
         Required parameters:
         -------------------
-        amp: float
-            Amplitude of the pulse
-        t_stop: float
-            Stop time of the pulse in seconds
+        stop: float
+            Stop time of the pulse in seconds. Must be > start.
             
         Optional parameters:
         -------------------
-        t_start: float
+        start: float
             Start time of the pulse (default: 0)
         """
     )
@@ -438,43 +509,44 @@ def STIRAP_stoke() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
 
 @validate_pulse_definition
 def STIRAP_pump() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a STIRAP pump pulse."""
-    lambda_val = 4
-    tau_for_mono = (t_stop - t_start) / 6
-    center = (t_stop - t_start) / 2 + t_start
+    """Symbolic definition of a STIRAP pump pulse envelope.
+    Unscaled (based on exp and trig functions, normalized form)."""
+    lambda_val = sp.Float(4.0)
+    tau_for_mono = (stop - start) / sp.Float(6.0)
+    center = (stop - start) / sp.Float(2.0) + start
     
-    mono_increasing = 1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono))
+    # mono_increasing_expr = 1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono)) # Re-inline
     
-    T0 = 2 * tau_for_mono
-    hyper_Gaussian = sp.exp(-((t - center) / T0) ** (2*3))
+    hyper_Gaussian_exponent = -((t - center) / (2 * tau_for_mono)) ** sp.Integer(6)
+    hyper_Gaussian = sp.exp(hyper_Gaussian_exponent)
     
-    a = hyper_Gaussian.subs(t, t_start)
+    val_at_start = hyper_Gaussian.subs(t, start)
+    # denominator = sp.Max(1 - val_at_start, 1e-9)
+    normalized_hyper_G = (hyper_Gaussian - val_at_start) / (1 - val_at_start)
+
+    # Pump pulse uses sin part of the mixing angle
+    envelope = normalized_hyper_G * sp.sin(sp.pi/2 * (1 / (1 + sp.exp(-lambda_val * (t - center) / tau_for_mono))))
     
-    envelope = (hyper_Gaussian - a)/(1-a) * sp.sin(sp.pi/2 * mono_increasing) * 2 * sp.pi * amp
-    
-    # Default values
     defaults = {
-        t_start: 0
+        start: 0.0
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp', 't_stop'],
+        required_params=['stop'], # No 'amp'
         optional_params={
-            't_start': 0
+            'start': 0.0
         },
-        docstring="""STIRAP pump pulse.
+        docstring="""STIRAP pump pulse shape (normalized).
+        Based on hyper-Gaussian and sinusoidal mixing angle.
         
         Required parameters:
         -------------------
-        amp: float
-            Amplitude of the pulse
-        t_stop: float
-            Stop time of the pulse in seconds
+        stop: float
+            Stop time of the pulse in seconds. Must be > start.
             
         Optional parameters:
         -------------------
-        t_start: float
+        start: float
             Start time of the pulse (default: 0)
         """
     )
@@ -483,51 +555,55 @@ def STIRAP_pump() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
 
 @validate_pulse_definition
 def Hyper_Gaussian_DRAG_STIRAP_stoke() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a Hyper-Gaussian DRAG STIRAP stoke pulse."""
-    lambda_val = 4
-    tau_mono = (t_stop - t_start) / 6
-    center = (t_stop + t_start) / 2 + t_start
-    
-    def mono(t):
-        return 1 / (1 + sp.exp(-lambda_val * (t - center) / tau_mono))
+    """Symbolic definition of a Hyper-Gaussian DRAG STIRAP stoke pulse.
+    Main STIRAP stoke component is unscaled/normalized.
+    'amp_correction' is the coefficient for the derivative term."""
+    lambda_val = sp.Float(4.0)
+    tau_mono = (stop - start) / sp.Float(6.0)
+    center_time = (stop + start) / sp.Float(2.0) # Renamed center to center_time
+        
+    mono_expr = 1 / (1 + sp.exp(-lambda_val * (t - center_time) / tau_mono))
     
     T0 = 2 * tau_mono
-    hyperG = sp.exp(-((t - center) / T0) ** 6)
-    d_hyperG = hyperG * (-6) * ((t - center) / T0) ** 5 / T0
+    hyperG_expr = sp.exp(-((t - center_time) / T0) ** 6)
+    # d_hyperG = hyperG_expr * (-6) * ((t - center_time) / T0) ** 5 / T0 # For derivative calc later
     
-    a0 = hyperG.subs(t, t_start)
+    a0 = hyperG_expr.subs(t, start)
     
-    envelope = (hyperG - a0) / (1 - a0) * sp.cos(sp.pi/2 * mono(t))
-    d_envelope = (d_hyperG / (1 - a0) - (hyperG - a0) / (1 - a0)**2 * d_hyperG.subs(t, t_start)) * sp.cos(sp.pi/2 * mono(t)) + \
-                 (hyperG - a0)/(1 - a0) * (-sp.pi/2) * sp.sin(sp.pi/2 * mono(t)) * (lambda_val / tau_mono) * mono(t) * (1 - mono(t))
+    # Main STIRAP stoke envelope (normalized)
+    main_envelope = (hyperG_expr - a0) / (1 - a0) * sp.cos(sp.pi/2 * mono_expr)
     
-    complex_envelope = 2 * sp.pi * (amp * envelope - sp.I * amp_correction * d_envelope)
+    # Derivative of the main envelope for DRAG
+    # d_mono = (lambda_val / tau_mono) * mono_expr * (1 - mono_expr)
+    # d_main_envelope_term1 = (d_hyperG / (1 - a0) - (hyperG_expr - a0) / (1 - a0)**2 * d_hyperG.subs(t, start)) * sp.cos(sp.pi/2 * mono_expr)
+    # d_main_envelope_term2 = (hyperG_expr - a0)/(1 - a0) * (-sp.pi/2) * sp.sin(sp.pi/2 * mono_expr) * d_mono
+    # derivative_of_main_envelope = d_main_envelope_term1 + d_main_envelope_term2
+    derivative_of_main_envelope = sp.diff(main_envelope, t)
+
+    complex_envelope = main_envelope - sp.I * amp_correction * derivative_of_main_envelope
     
-    # Default values
     defaults = {
-        t_start: 0
+        start: 0.0
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp', 'amp_correction', 't_stop'],
+        required_params=['amp_correction', 'stop'], # No 'amp'
         optional_params={
-            't_start': 0
+            'start': 0.0
         },
-        docstring="""Hyper-Gaussian DRAG STIRAP stoke pulse.
+        docstring="""Hyper-Gaussian DRAG STIRAP stoke pulse shape.
+        Main stoke component is normalized. 'amp_correction' is DRAG coefficient.
         
         Required parameters:
         -------------------
-        amp: float
-            Amplitude of the pulse
         amp_correction: float
-            Amplitude correction for DRAG
-        t_stop: float
-            Stop time of the pulse in seconds
+            DRAG coefficient (beta).
+        stop: float
+            Stop time of the pulse. Must be > start.
             
         Optional parameters:
         -------------------
-        t_start: float
+        start: float
             Start time of the pulse (default: 0)
         """
     )
@@ -536,51 +612,50 @@ def Hyper_Gaussian_DRAG_STIRAP_stoke() -> Tuple[sp.Expr, Dict[sp.Symbol, float],
 
 @validate_pulse_definition
 def Hyper_Gaussian_DRAG_STIRAP_pump() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a Hyper-Gaussian DRAG STIRAP pump pulse."""
-    lambda_val = 4
-    tau_mono = (t_stop - t_start) / 6
-    center = (t_stop + t_start) / 2 + t_start
+    """Symbolic definition of a Hyper-Gaussian DRAG STIRAP pump pulse.
+    Main STIRAP pump component is unscaled/normalized.
+    'amp_correction' is the coefficient for the derivative term."""
+    lambda_val = sp.Float(4.0)
+    tau_mono = (stop - start) / sp.Float(6.0)
+    center_time = (stop + start) / sp.Float(2.0) # Renamed center to center_time
     
-    def mono(t):
-        return 1 / (1 + sp.exp(-lambda_val * (t - center) / tau_mono))
+    mono_expr = 1 / (1 + sp.exp(-lambda_val * (t - center_time) / tau_mono))
     
     T0 = 2 * tau_mono
-    hyperG = sp.exp(-((t - center) / T0) ** 6)
-    d_hyperG = hyperG * (-6) * ((t - center) / T0) ** 5 / T0
+    hyperG_expr = sp.exp(-((t - center_time) / T0) ** 6)
+    # d_hyperG = hyperG_expr * (-6) * ((t - center_time) / T0) ** 5 / T0
     
-    a0 = hyperG.subs(t, t_start)
+    a0 = hyperG_expr.subs(t, start)
     
-    envelope = (hyperG - a0) / (1 - a0) * sp.sin(sp.pi/2 * mono(t))
-    d_envelope = (d_hyperG / (1 - a0) - (hyperG - a0) / (1 - a0)**2 * d_hyperG.subs(t, t_start)) * sp.sin(sp.pi/2 * mono(t)) + \
-                 (hyperG - a0)/(1 - a0) * (sp.pi/2) * sp.cos(sp.pi/2 * mono(t)) * (lambda_val / tau_mono) * mono(t) * (1 - mono(t))
+    main_envelope = (hyperG_expr - a0) / (1 - a0) * sp.sin(sp.pi/2 * mono_expr)
+    # derivative_of_main_envelope = (d_hyperG / (1 - a0) - (hyperG_expr - a0) / (1 - a0)**2 * d_hyperG.subs(t, start)) * sp.sin(sp.pi/2 * mono_expr) + \
+    #              (hyperG_expr - a0)/(1 - a0) * (sp.pi/2) * sp.cos(sp.pi/2 * mono_expr) * (lambda_val / tau_mono) * mono_expr * (1 - mono_expr)
+    derivative_of_main_envelope = sp.diff(main_envelope, t)
     
-    complex_envelope = 2 * sp.pi * (amp * envelope - sp.I * amp_correction * d_envelope)
+    complex_envelope = main_envelope - sp.I * amp_correction * derivative_of_main_envelope
     
-    # Default values
     defaults = {
-        t_start: 0
+        start: 0.0
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp', 'amp_correction', 't_stop'],
+        required_params=['amp_correction', 'stop'], # No 'amp'
         optional_params={
-            't_start': 0
+            'start': 0.0
         },
-        docstring="""Hyper-Gaussian DRAG STIRAP pump pulse.
+        docstring="""Hyper-Gaussian DRAG STIRAP pump pulse shape.
+        Main pump component is normalized. 'amp_correction' is DRAG coefficient.
         
         Required parameters:
         -------------------
-        amp: float
-            Amplitude of the pulse
         amp_correction: float
-            Amplitude correction for DRAG
-        t_stop: float
-            Stop time of the pulse in seconds
+            DRAG coefficient (beta).
+        stop: float
+            Stop time of the pulse. Must be > start.
             
         Optional parameters:
         -------------------
-        t_start: float
+        start: float
             Start time of the pulse (default: 0)
         """
     )
@@ -589,71 +664,68 @@ def Hyper_Gaussian_DRAG_STIRAP_pump() -> Tuple[sp.Expr, Dict[sp.Symbol, float], 
 
 @validate_pulse_definition
 def sin_squared_recursive_DRAG() -> Tuple[sp.Expr, Dict[sp.Symbol, float], PulseParameters]:
-    """Symbolic definition of a recursive DRAG pulse that punches out two notches."""
-    # Get DRAG coefficients
-    """Symbolic definition of recursive DRAG coefficients.
+    """Symbolic definition of a recursive DRAG pulse envelope (unscaled).
+    The main sin_squared component is unscaled (peak 1).
+    Delta parameters define normalized DRAG coefficients."""
+    # Normalized DRAG coefficients (kappa1/amp and kappa2/amp from original)
+    # kappa2_norm = -1 / (delta1 * delta2)
+    # kappa1_norm = (delta1 + delta2) / (delta1 * delta2)
+    # For safety with symbolic division if delta1 or delta2 can be zero (though physically unlikely)
+    # we should ensure they are non-zero or handle it. Assuming they are non-zero from context.
+    kappa2_norm = -1 / (delta1 * delta2)
+    kappa1_norm = (delta1 + delta2) / (delta1 * delta2)
+
+    end_time = start + length # Renamed 'end' to 'end_time'
+    two_pi_over_L = 2 * sp.pi / length # Renamed T to L for length
+    pi_over_L = sp.pi / length
     
-    Formula (Li et al. (2024), Appendix D):
-        κ₂ = - A / (Δ₁ Δ₂)
-        κ₁ =   A (Δ₁ + Δ₂) / (Δ₁ Δ₂)
-    """
-    kappa2 = -amp / (delta1 * delta2)
-    kappa1 = amp * (delta1 + delta2) / (delta1 * delta2)
-    
-    # Define time variables
-    t_end = t_start + t_duration
-    two_pi_over_T = 2 * sp.pi / t_duration
-    pi_over_T = sp.pi / t_duration
-    
-    # ---- rectangular window ----
     inside = sp.Piecewise(
-        (1, (t >= t_start) & (t <= t_end)),
+        (1, (t >= start) & (t <= end_time)),
         (0, True)
     )
     
-    # ---- sin² envelope and its first two derivatives ----
-    envelope = inside * sp.sin(sp.pi * (t - t_start) / t_duration) ** 2
+    # Main sin^2 envelope, peak is 1
+    main_envelope = inside * sp.sin(sp.pi * (t - start) / length) ** 2
     
-    # 1st derivative: (π/T)·sin(2πτ) with τ = (t-t₀)/T
-    envelope_d1 = inside * pi_over_T * sp.sin(two_pi_over_T * (t - t_start))
+    # 1st derivative of main_envelope
+    # derivative1 = inside * pi_over_L * sp.sin(two_pi_over_L * (t - start))
+    derivative1 = sp.diff(main_envelope, t) # More robust way to get derivative
     
-    # 2nd derivative: (2π/T)² · (cos(2πτ) – 1)
-    envelope_d2 = inside * 2 * (pi_over_T ** 2) * (sp.cos(two_pi_over_T * (t - t_start)) - 1)
+    # 2nd derivative of main_envelope
+    # derivative2 = inside * 2 * (pi_over_L ** 2) * (sp.cos(two_pi_over_L * (t - start)) - 1)
+    # Sympy might simplify the derivative of Piecewise, which is good.
+    # For recursive DRAG, often derivatives of the un-windowed shape are used, then windowed.
+    # Let's use derivative of the windowed main_envelope.
+    derivative2 = sp.diff(derivative1, t)
+        
+    baseband_envelope = main_envelope + sp.I * kappa1_norm * derivative1 + kappa2_norm * derivative2
     
-    # Complex baseband envelope
-    baseband = amp * envelope + sp.I * kappa1 * envelope_d1 + kappa2 * envelope_d2
-    
-    # Default values
     defaults = {
-        t_start: 0
+        start: 0.0
     }
     
-    # Parameter documentation
     params = PulseParameters(
-        required_params=['amp', 'delta1', 'delta2', 't_duration'],
+        required_params=['delta1', 'delta2', 'length'], # No 'amp'
         optional_params={
-            't_start': 0
+            'start': 0.0
         },
-        docstring="""Recursive DRAG pulse that punches out two notches.
+        docstring="""Recursive DRAG pulse shape with two spectral notches.
+        Main sin_squared component has peak 1.
         
         Required parameters:
         -------------------
-        amp: float
-            Real in-phase amplitude A
         delta1: float
-            Detuning Δ₁ (rad/s) of 1st unwanted transition
-            (use ±2π·MHz etc.; sign does not matter)
+            Detuning Δ₁ (rad/s) of 1st unwanted transition. Must be non-zero.
         delta2: float
-            Detuning Δ₂ (rad/s) of 2nd unwanted transition
-            (use ±2π·MHz etc.; sign does not matter)
-        t_duration: float
-            Pulse length in seconds
+            Detuning Δ₂ (rad/s) of 2nd unwanted transition. Must be non-zero.
+        length: float
+            Pulse length in seconds. Must be > 0.
             
         Optional parameters:
         -------------------
-        t_start: float
+        start: float
             Left edge of pulse window (default: 0)
         """
     )
     
-    return baseband, defaults, params 
+    return baseband_envelope, defaults, params 
