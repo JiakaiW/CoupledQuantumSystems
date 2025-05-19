@@ -272,7 +272,6 @@ def sin_squared_recursive_DRAG(t, args=None, math=np):
     if args is None:
         args = {}
 
-    w_d        = args['w_d']
     amp        = args['amp']
     delta1     = args['delta1']
     delta2     = args['delta2']
@@ -321,10 +320,7 @@ def sin_squared_recursive_DRAG(t, args=None, math=np):
         kappa2 * envelope_d2
     )
 
-    # ---- up‑convert with cosine modulation (∝ Re{…}) ----
-    modulation = math.cos(2.0 * math.pi * w_d * t - phi)
-
-    return baseband * modulation
+    return baseband
 
 def gaussian_pulse_envelope(t, args={},math=np):
     """Envelope function for a Gaussian pulse.

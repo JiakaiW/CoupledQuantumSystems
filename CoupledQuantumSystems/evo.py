@@ -1,8 +1,9 @@
 import numpy as np
 import qutip
-from typing import List, Union, Any
+from typing import List, Union, Any, Dict, Optional, Tuple
 from CoupledQuantumSystems.drive import *
-from qiskit_dynamics import Solver
+from CoupledQuantumSystems.drive_symbo import *
+from qiskit_dynamics import Solver, Signal
 
 def ODEsolve_and_post_process(
             y0: qutip.Qobj,
@@ -31,21 +32,32 @@ def ODEsolve_and_post_process(
         raise ValueError("rotating_frame, rwa_cutoff_freq, and rwa_carrier_freqs are only supported for qiskit_dynamics")
     
     if method in ['qutip.mesolve', 'qutip.mcsolve']:
-        H_with_drives =  [static_hamiltonian] + \
-            [[drive_term.driven_op, drive_term.pulse_shape_func_with_id] for drive_term in drive_terms]
-
+        H =  [static_hamiltonian] 
+        for drive_term in drive_terms:
+            if isinstance(drive_term, DriveTerm):
+                # Old DriveTerm type
+                H.append([drive_term.driven_op, drive_term.pulse_shape_func_with_id])
+            else:
+                # New DriveTermSymbolic type
+                H.append([drive_term.driven_op, drive_term.pulse_shape_func])
         additional_args = {}
         for drive_term in drive_terms:
-            for key in drive_term.pulse_shape_args_with_id:
-                if key in additional_args:
-                    raise ValueError(f"Duplicate key found: {key}")
-                else:
-                    additional_args[key] = drive_term.pulse_shape_args_with_id[key]
+            if isinstance(drive_term, DriveTerm):
+                # Old DriveTerm type
+                for key in drive_term.pulse_shape_args_with_id:
+                    if key in additional_args:
+                        raise ValueError(f"Duplicate key found: {key}")
+                    else:
+                        additional_args[key] = drive_term.pulse_shape_args_with_id[key]
+            else:
+                # New DriveTermSymbolic type
+                # No need to handle args as they're already substituted in __post_init__
+                pass
 
         if method == 'qutip.mesolve':
             result = qutip.mesolve(
                 rho0=y0,
-                H=H_with_drives,
+                H=H,
                 tlist=tlist,
                 c_ops=c_ops,
                 e_ops = e_ops,
@@ -56,7 +68,7 @@ def ODEsolve_and_post_process(
 
         elif method == 'qutip.mcsolve':
             result = qutip.mcsolve(psi0=y0, 
-                                H= H_with_drives,
+                                H= H,
                                 tlist=tlist,
                                 args = additional_args,
                                 c_ops=c_ops,
@@ -74,10 +86,21 @@ def ODEsolve_and_post_process(
             rwa_cutoff_freq=rwa_cutoff_freq,
             rwa_carrier_freqs=rwa_carrier_freqs
         )
+        signals = []
+        for drive_term in drive_terms:
+            if isinstance(drive_term, DriveTerm):
+                # Old DriveTerm type
+                signals.append(drive_term.envelope_to_qiskit_Signal())
+            else:
+                # New DriveTermSymbolic type
+                if JAX_AVAILABLE:
+                    signals.append(drive_term.to_qiskit_signal_jax())
+                else:
+                    signals.append(drive_term.to_qiskit_signal_numpy())
         results_qiskit_dynamics = qiskit_solver.solve(t_span=[tlist[0], tlist[-1]],
                                                       t_eval = tlist, 
                                                       y0=y0.full(), 
-                                                      signals=[drive_term.envelope_to_qiskit_Signal() for drive_term in drive_terms], 
+                                                      signals=signals, 
                                                       atol=1e-10, 
                                                       rtol=1e-10)
         result = qutip.solver.Result()
@@ -98,9 +121,9 @@ def ODEsolve_and_post_process(
         raise Exception("solver method not supported")
 
 
-        result = post_process(result,
-                                    post_processing_funcs,
-                                    post_processing_args)
+    result = post_process(result,
+                                post_processing_funcs,
+                                post_processing_args)
         
     if file_name!= None:
         from datetime import datetime
@@ -111,3 +134,23 @@ def ODEsolve_and_post_process(
             pickle.dump(result, file)
     return result
 
+def post_process(
+            result:qutip.solver.Result,
+            post_processing_funcs:List=[],
+            post_processing_args:List=[],
+            show_progress:bool = False,
+            ):
+    # for func, args in zip(post_processing_funcs, post_processing_args):
+    #     result.states = [func(state, *args) for state in tqdm(result.states, desc=f"Processing states with {func.__name__}")]
+
+    # Editted post processing so that it doesn't overwrite result.states
+    last_attribute_name = "states"
+    for func, args in zip(post_processing_funcs, post_processing_args):
+        new_attr_name = f"states_{func.__name__}" 
+        if show_progress:
+            processed_states = [func(state, *args) for state in tqdm( getattr(result, last_attribute_name), desc=f"Processing states with {func.__name__}")]
+        else:
+            processed_states = [func(state, *args) for state in getattr(result, last_attribute_name)]
+        setattr(result, new_attr_name, processed_states)
+        last_attribute_name = new_attr_name
+    return result
