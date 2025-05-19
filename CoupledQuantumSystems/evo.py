@@ -39,7 +39,7 @@ def ODEsolve_and_post_process(
                 H.append([drive_term.driven_op, drive_term.pulse_shape_func_with_id])
             else:
                 # New DriveTermSymbolic type
-                H.append([drive_term.driven_op, drive_term.pulse_shape_func])
+                H.append([drive_term.driven_op, drive_term.numpy_coeff])
         additional_args = {}
         for drive_term in drive_terms:
             if isinstance(drive_term, DriveTerm):

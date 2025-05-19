@@ -48,10 +48,10 @@ def _lambdify_both(expr: sp.Expr):
 class DriveTermSymbolic:
     # --- Physics ---
     driven_op: qutip.Qobj
-    modulation_freq: float         # Hz
+    modulation_freq: float         # GHz
     phi: float = 0.0               # rad phase
 
-    # --- Envelope (provide ONE of the two) ---
+    # --- Envelope (provide ONE of the two, either as a function or as symbolic expression) ---
     pulse_shape_func: Optional[Callable] = None     # (t,args,math) -> float
     pulse_shape_args: Dict[str, float] = field(default_factory=dict)
 
