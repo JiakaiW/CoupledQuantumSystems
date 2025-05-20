@@ -10,9 +10,23 @@ import scqubits
 
 from ..dynamics import *
 from ..utils import *
-from .systems import QuantumSystem
+from .quantumsystem import QuantumSystem
 
-class gfIFQ(QuantumSystem):
+class Qubit(QuantumSystem):
+    """Base class for qubit implementations.
+
+    This class provides a base implementation for qubit systems, including
+    methods for calculating transition rates and generating drive terms.
+    """
+    def get_T1_c_ops(self):
+        pass
+
+    def get_Tphi_c_ops(self):
+        pass
+    
+
+
+class Fluxonium(Qubit):
     """Fluxonium qubit implementation with additional analysis capabilities.
 
     This class extends the basic Fluxonium implementation to include methods for
@@ -30,17 +44,17 @@ class gfIFQ(QuantumSystem):
                  EC,
                  EL,
                  flux=0, truncated_dim=20) -> None:
-        self.fluxonium = scqubits.Fluxonium(EJ=EJ,
+        self.qbt = scqubits.Fluxonium(EJ=EJ,
                                             EC=EC,
                                             EL=EL,
                                             flux=flux, cutoff=110,
                                             truncated_dim=truncated_dim)
         self.truncated_dim = truncated_dim
-        self.evals = self.fluxonium.eigenvals(evals_count=truncated_dim)
+        self.evals = self.qbt.eigenvals(evals_count=truncated_dim)
         self.diag_hamiltonian = qutip.Qobj(2 * np.pi * np.diag(self.evals))
-        self.phi_tabel = self.fluxonium.matrixelement_table(
+        self.phi_tabel = self.qbt.matrixelement_table(
             'phi_operator', evals_count=truncated_dim)
-        self.n_tabel = self.fluxonium.matrixelement_table(
+        self.n_tabel = self.qbt.matrixelement_table(
             'n_operator', evals_count=truncated_dim)
 
     def get_T1_c_ops(self,
@@ -52,8 +66,8 @@ class gfIFQ(QuantumSystem):
             (self.truncated_dim, self.truncated_dim), np.inf)
         one_over_f_T1_array = np.full(
             (self.truncated_dim, self.truncated_dim), np.inf)
-        EL = self.fluxonium.EL
-        EC = self.fluxonium.EC
+        EL = self.qbt.EL
+        EC = self.qbt.EC
         # T1
         for i in range(self.truncated_dim):
             for j in range(self.truncated_dim):
@@ -79,9 +93,9 @@ class gfIFQ(QuantumSystem):
             Tphi_array[ql] = T_phi(
                 second_order_derivative=second_order_derivative(partial(
                     get_fluxonium_frequency_with_2pi,
-                    EJ=self.fluxonium.EJ,
-                    EC=self.fluxonium.EC,
-                    EL=self.fluxonium.EL,
+                    EJ=self.qbt.EJ,
+                    EC=self.qbt.EC,
+                    EL=self.qbt.EL,
                     i=0,j=ql
                     ),x0=0),
                 one_over_f_flux_noise_amplitude=one_over_f_flux_noise_amplitude
@@ -106,7 +120,7 @@ class gfIFQ(QuantumSystem):
         drive_terms = [
             DriveTerm(
                 driven_op=qutip.Qobj(
-                    self.fluxonium.n_operator(energy_esys=True)),
+                    self.qbt.n_operator(energy_esys=True)),
                 pulse_shape_func=STIRAP_envelope,
                 pulse_id='stoke',  # Stoke is the first pulse, pump is the second
                 modulation_freq=np.abs(self.evals[k]-self.evals[j]) - detuning_ij,
@@ -120,7 +134,7 @@ class gfIFQ(QuantumSystem):
             ),
             DriveTerm(
                 driven_op=qutip.Qobj(
-                    self.fluxonium.n_operator(energy_esys=True)),
+                    self.qbt.n_operator(energy_esys=True)),
                 pulse_shape_func=STIRAP_envelope,
                 pulse_id='pump',
                 modulation_freq=np.abs(self.evals[j]-self.evals[i]) - detuning_jk,
@@ -164,7 +178,7 @@ class gfIFQ(QuantumSystem):
             drive_terms = [
                 DriveTerm(
                     driven_op=qutip.Qobj(
-                        self.fluxonium.n_operator(energy_esys=True)),
+                        self.qbt.n_operator(energy_esys=True)),
                     pulse_shape_func=sin_squared_pulse_envelope,
                     pulse_id='ij',
                     modulation_freq=np.abs(self.evals[k]-self.evals[j])-detuning1,
@@ -178,7 +192,7 @@ class gfIFQ(QuantumSystem):
                 ),
                 DriveTerm(
                     driven_op=qutip.Qobj(
-                        self.fluxonium.n_operator(energy_esys=True)),
+                        self.qbt.n_operator(energy_esys=True)),
                     pulse_shape_func=sin_squared_pulse_envelope,
                     pulse_id='jk',
                     modulation_freq=np.abs(self.evals[j]-self.evals[i])-detuning2,
@@ -202,7 +216,7 @@ class gfIFQ(QuantumSystem):
             drive_terms = [
                 DriveTerm(
                     driven_op=qutip.Qobj(
-                        self.fluxonium.n_operator(energy_esys=True)),
+                        self.qbt.n_operator(energy_esys=True)),
                     pulse_shape_func=gaussian_pulse_envelope,
                     pulse_id='ij',
                     modulation_freq=np.abs(self.evals[j]-self.evals[i])-detuning1,
@@ -216,7 +230,7 @@ class gfIFQ(QuantumSystem):
                 ),
                 DriveTerm(
                     driven_op=qutip.Qobj(
-                        self.fluxonium.n_operator(energy_esys=True)),
+                        self.qbt.n_operator(energy_esys=True)),
                     pulse_shape_func=gaussian_pulse_envelope,
                     pulse_id='jk',
                     modulation_freq=np.abs(self.evals[k]-self.evals[j])-detuning2,
@@ -262,7 +276,7 @@ class gfIFQ(QuantumSystem):
             drive_terms = [
                 DriveTerm(
                     driven_op=qutip.Qobj(
-                        self.fluxonium.n_operator(energy_esys=True)),
+                        self.qbt.n_operator(energy_esys=True)),
                     pulse_shape_func=sin_squared_DRAG_envelope,
                     pulse_id='ij',
                     modulation_freq=np.abs(self.evals[j]-self.evals[i])-detuning1,
@@ -277,7 +291,7 @@ class gfIFQ(QuantumSystem):
                 ),
                 DriveTerm(
                     driven_op=qutip.Qobj(
-                        self.fluxonium.n_operator(energy_esys=True)),
+                        self.qbt.n_operator(energy_esys=True)),
                     pulse_shape_func=sin_squared_DRAG_envelope,
                     pulse_id='jk',
                     modulation_freq=np.abs(self.evals[k]-self.evals[j])-detuning2,
@@ -302,7 +316,7 @@ class gfIFQ(QuantumSystem):
             drive_terms = [
                 DriveTerm(
                     driven_op=qutip.Qobj(
-                        self.fluxonium.n_operator(energy_esys=True)),
+                        self.qbt.n_operator(energy_esys=True)),
                     pulse_shape_func=gaussian_DRAG_pulse_envelope,
                     pulse_id='ij',
                     modulation_freq=np.abs(self.evals[j]-self.evals[i])-detuning1,
@@ -317,7 +331,7 @@ class gfIFQ(QuantumSystem):
                 ),
                 DriveTerm(
                     driven_op=qutip.Qobj(
-                        self.fluxonium.n_operator(energy_esys=True)),
+                        self.qbt.n_operator(energy_esys=True)),
                     pulse_shape_func=gaussian_DRAG_pulse_envelope,
                     pulse_id='jk',
                     modulation_freq=np.abs(self.evals[k]-self.evals[j])-detuning2,
@@ -366,7 +380,7 @@ class gfIFQ(QuantumSystem):
         drive_terms = [
             DriveTerm(
                 driven_op=qutip.Qobj(
-                    self.fluxonium.n_operator(energy_esys=True)),
+                    self.qbt.n_operator(energy_esys=True)),
                 pulse_shape_func=square_pulse_with_rise_fall_envelope,
                 pulse_id='pi',
                 modulation_freq=self.evals[j]-self.evals[i],
