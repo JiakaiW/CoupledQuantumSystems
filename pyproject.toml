@@ -1,0 +1,52 @@
+[build-system]               # ---- how to build the wheel --------------------
+requires = ["setuptools>=69", "wheel"]   # setuptools handles everything
+build-backend = "setuptools.build_meta"
+
+[project]                    # ---- package metadata (PEP 621) ---------------
+name = "CoupledQuantumSystems"
+version = "0.4.0"            # bump as usual
+description = "Hamiltonian and pulse-level simulator for coupled transmon–resonator systems"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Jiakai Wang", email = "jwang2648@wisc.edu"},
+]
+keywords = [
+    "quantum-computing", "Hamiltonian-simulation", "qutip", "scqubits",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+# Core run-time requirements (minimum, not pinned)
+dependencies = [
+    "numpy>=1.26,<3",
+    "scipy>=1.12,<2",
+    "qutip>=4.7,<5",
+    "scqubits>=4.0",
+    "loky>=3.4",
+    "bidict>=0.22",
+    "rich>=13",
+]
+
+[project.optional-dependencies]  # ---- extras --------------------------------
+dev = ["pytest>=7"]
+jax = [
+    # Any CUDA-12 wheel 0.4.29+; users choose cpu/cuda via the extra tag
+    "jax[cuda12]>=0.4.29,<0.5",
+    "dynamiqs>=0.3.2",
+]
+qiskit = [
+    "qiskit==1.4.2",
+    "qiskit-dynamics==0.5.1",
+]
+
+[tool.setuptools]
+packages = {find = {exclude = ["notebooks*"]}}
+
+# Include data files tracked by git + specified in MANIFEST.in
+include-package-data = true

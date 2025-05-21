@@ -3,7 +3,7 @@ import numpy as np
 import qutip
 import scqubits
 
-from CoupledQuantumSystems.systems.singlequbitsystems import gfIFQ
+from CoupledQuantumSystems.systems.singlequbitsystems import Fluxonium
 
 class TestSingleQubitSystem(unittest.TestCase):
     def setUp(self):
@@ -21,7 +21,7 @@ class TestSingleQubitSystem(unittest.TestCase):
 
     def test_fluxonium_initialization(self):
         """Test that we can create a fluxonium qubit instance."""
-        qubit = gfIFQ(
+        qubit = Fluxonium(
             EJ=self.EJ,
             EC=self.EC,
             EL=self.EL,

@@ -6,11 +6,10 @@ that work with Nevergrad optimizers.
 """
 
 from concurrent.futures import ProcessPoolExecutor
+import time
 from rich.live import Live
 from rich.table import Table
 from rich import box
-import time
-
 
 class OptimizationProgress:
     """Tracks and displays the progress of optimization tasks.
