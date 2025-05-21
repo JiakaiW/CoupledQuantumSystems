@@ -7,7 +7,7 @@ with open(README_PATH) as readme_file:
 
 setup(
     name="CoupledQuantumSystems",
-    version="0.3",
+    version="0.4",
     description="CoupledQuantumSystems",
     long_description=README,
     long_description_content_type="text/markdown",
@@ -18,21 +18,25 @@ setup(
     packages=find_namespace_packages(exclude=['notebooks']),
     install_requires=[
         "scipy==1.12.0",
-        "qiskit==1.4.2",
-        "qiskit_dynamics==0.5.1",
         "numpy==1.26.4",
         "qutip==4.7.5",
         "scqubits==4.0.0",
         "loky",
-        "bidict",
-        "nevergrad",
-        "rich"
+        "bidict"
     ],
     extras_require={
         'dev': ['pytest'],
         'jax': [
             "jax[cuda12]",
             "dynamiqs",
+        ],
+        'qiskit': [
+            "qiskit==1.4.2",
+            "qiskit_dynamics==0.5.1",
+        ],
+        'optimize': [
+            "nevergrad",
+            "rich"
         ]
     },
     classifiers=[

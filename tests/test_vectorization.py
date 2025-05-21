@@ -1,5 +1,4 @@
-from CoupledQuantumSystems.qobj_manip import dressed_to_product_vectorized
-
+from CoupledQuantumSystems import dressed_to_product_vectorized
 import numpy as np
 
 

@@ -63,3 +63,4 @@ docs/venv/
 htmlcov/
 .pytest_cache/
 .tox/
+debugging_private/
