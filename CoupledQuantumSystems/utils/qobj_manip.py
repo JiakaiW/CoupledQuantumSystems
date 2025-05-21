@@ -52,7 +52,7 @@ def pad_back_custom(qobj: qutip.Qobj, products_to_keep: Union[list,None], produc
         padded_matrix[np.ix_(indices_to_keep, indices_to_keep)] = qobj.full()
         return qutip.Qobj(padded_matrix)
 
-def generate_single_mapping(H_with_interaction_no_drive,evals = None, evecs = None) -> np.ndarray:
+def generate_single_mapping(H_with_interaction_no_drive,evals = None, evecs = None, suppress_overlap_warnings = False) -> np.ndarray:
     """
     The input should be in product basis
     Maps product of bare states to dressed state
@@ -78,7 +78,8 @@ def generate_single_mapping(H_with_interaction_no_drive,evals = None, evecs = No
         overlap_matrix[:, max_position] = 0
         dressed_indices_of_product_states[int(max_position)] = dressed_index
         if (max_overlap**2 < OVERLAP_THRESHOLD):
-            print(f'max overlap^2 {max_overlap**2} below threshold for dressed state {dressed_index} with eval {evals[dressed_index]}')
+            if not suppress_overlap_warnings:
+                print(f'max overlap^2 {max_overlap**2} below threshold for dressed state {dressed_index} with eval {evals[dressed_index]}')
             failed = True
     product_to_dressed = {}
     for product, dressed in zip(product_state_names,dressed_indices_of_product_states):

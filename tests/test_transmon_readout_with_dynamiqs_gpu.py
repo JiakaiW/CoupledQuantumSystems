@@ -22,6 +22,7 @@ try:
     if not gpu_devices:
         pytest.skip("Skipping GPU test module: No GPU device found by JAX.", allow_module_level=True)
     dq.set_device('gpu') # Original set_device call, now conditional
+    dq.set_precision('double')
 except Exception as e:
     pytest.skip(f"Skipping GPU test module: Error during JAX GPU check or dq.set_device - {e}", allow_module_level=True)
 

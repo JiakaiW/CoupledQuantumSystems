@@ -31,7 +31,8 @@ class CoupledSystem(QuantumSystem):
                  hilbertspace,
                  products_to_keep,
                  qbt_position,
-                 computaional_states):
+                 computaional_states,
+                 suppress_overlap_warnings = False):
         """Initialize a coupled quantum system.
 
         Args:
@@ -58,7 +59,7 @@ class CoupledSystem(QuantumSystem):
         self.evals = hilbertspace["evals"][0]
         self.evecs = hilbertspace["evecs"][0]
         self.product_to_dressed, failed = generate_single_mapping(
-            self.hilbertspace.hamiltonian(), evals=self.evals, evecs=self.evecs)
+            self.hilbertspace.hamiltonian(), evals=self.evals, evecs=self.evecs, suppress_overlap_warnings=suppress_overlap_warnings)
         if failed:
             if hasattr(self, 'alternative_product_to_dressed') and callable(getattr(self, 'alternative_product_to_dressed')):
                 self.product_to_dressed = self.alternative_product_to_dressed()
@@ -426,7 +427,8 @@ class TransmonOscillatorSystem(QubitResonatorSystem):
                  osc: scqubits.Oscillator = None,
                  kappa=0.01,
                  g_strength: float = None,
-                 products_to_keep: List[List[int]] = None):
+                 products_to_keep: List[List[int]] = None,
+                 suppress_overlap_warnings = True):
         """Initialize a transmon-oscillator coupled system.
 
         Args:
@@ -459,7 +461,8 @@ class TransmonOscillatorSystem(QubitResonatorSystem):
         super().__init__(hilbertspace=hilbertspace,
                          products_to_keep=products_to_keep,
                          qbt_position=0,
-                         computaional_states=[0,1])
+                         computaional_states=[0,1],
+                         suppress_overlap_warnings=True)
 
         self.a = qutip.Qobj(self.hilbertspace.op_in_dressed_eigenbasis(
             self.osc.annihilation_operator)[:, :])
