@@ -3,8 +3,17 @@ import qutip
 from typing import List, Union, Any, Dict, Optional, Tuple
 from .drive import *
 from .drive_symbo import *
-from qiskit_dynamics import Solver, Signal
+
+try:
+    from qiskit_dynamics import Solver, Signal
+    QISKIT_AVAILABLE = True
+except ImportError:
+    Solver = None # type: ignore
+    Signal = None # type: ignore
+    QISKIT_AVAILABLE = False
+
 from tqdm import tqdm
+
 def ODEsolve_and_post_process(
             y0: qutip.Qobj,
             tlist: np.array, 
@@ -32,6 +41,9 @@ def ODEsolve_and_post_process(
     if (rotating_frame != False or rwa_cutoff_freq != None or rwa_carrier_freqs != None) and method != 'qiskit_dynamics':
         raise ValueError("rotating_frame, rwa_cutoff_freq, and rwa_carrier_freqs are only supported for qiskit_dynamics")
     
+    if method == 'qiskit_dynamics' and not QISKIT_AVAILABLE:
+        raise ImportError("Qiskit is not available. Please install qiskit and qiskit-dynamics to use method='qiskit_dynamics'.")
+
     if method in ['qutip.mesolve', 'qutip.mcsolve']:
         H =  [static_hamiltonian] 
         for drive_term in drive_terms:
@@ -79,6 +91,8 @@ def ODEsolve_and_post_process(
                                 progress_bar = qutip.ui.progressbar.EnhancedTextProgressBar() if print_progress else None,
                                 )
     elif method == 'qiskit_dynamics':
+        if not QISKIT_AVAILABLE: # Should be caught by the earlier check, but as a safeguard
+            raise ImportError("Qiskit is not available. Please install qiskit and qiskit-dynamics.")
         qiskit_solver = Solver(
             static_hamiltonian=static_hamiltonian.full(),
             hamiltonian_operators=[drive_term.driven_op.full() for drive_term in drive_terms],

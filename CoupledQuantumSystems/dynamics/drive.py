@@ -8,7 +8,13 @@
 from dataclasses import dataclass, field
 from typing import  Callable, Dict, List
 import numpy as np
-from qiskit_dynamics import Signal
+
+try:
+    from qiskit_dynamics import Signal
+    QISKIT_AVAILABLE = True
+except ImportError:
+    Signal = None # type: ignore
+    QISKIT_AVAILABLE = False
 
 try:
     import jax.numpy as jnp
@@ -104,6 +110,8 @@ class DriveTerm:
         Returns:
             Signal: A Qiskit Signal object representing this drive term's envelope.
         """
+        if not QISKIT_AVAILABLE:
+            raise ImportError("Qiskit is not available. Please install qiskit and qiskit-dynamics.")
         # Create a wrapper function that calls our pulse_shape_func_with_id
         def envelope_func(t):
             # Call our pulse shape function with the appropriate args

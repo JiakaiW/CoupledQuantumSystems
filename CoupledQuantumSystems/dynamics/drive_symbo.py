@@ -19,13 +19,9 @@ from typing import Callable, Dict, Optional, Any, List
 import numpy as np
 import qutip
 import sympy as sp
-from qiskit_dynamics import Signal
-from qiskit import pulse
-from qiskit_dynamics.pulse import InstructionToSignals
 
 # Import from local package
 from .pulse_shapes_symbo import create_pulse_shape, PULSE_PARAM_SPECS, t_sym as default_t_sym
-
 
 # optional JAX backend
 try:
@@ -36,6 +32,17 @@ except ImportError:
     jnp = None
     jax = None
     JAX_AVAILABLE = False
+
+try:
+    from qiskit_dynamics import Signal
+    from qiskit import pulse
+    from qiskit_dynamics.pulse import InstructionToSignals
+    QISKIT_AVAILABLE = True
+except ImportError:
+    Signal = None # type: ignore
+    pulse = None # type: ignore
+    InstructionToSignals = None # type: ignore
+    QISKIT_AVAILABLE = False
 
 ############################################################################
 # Utility: LambdifiedExpression (REMOVED as direct lambdification is now simpler)
@@ -177,7 +184,9 @@ class DriveTermSymbolic:
     # ------------------------------------------------------------
     # Qiskit Signals
     # ------------------------------------------------------------
-    def to_qiskit_signal_numpy(self) -> Signal:
+    def to_qiskit_signal_numpy(self) -> Signal: # type: ignore
+        if not QISKIT_AVAILABLE:
+            raise ImportError("Qiskit is not available. Please install qiskit and qiskit-dynamics.")
         is_symbolic_path = self.pulse_type is not None
         def qiskit_envelope_np(t_arr):
             if is_symbolic_path:
@@ -193,7 +202,9 @@ class DriveTermSymbolic:
             name=self.pulse_id or f"{self.pulse_type}_drive_np" if self.pulse_type else "legacy_drive_np"
         )
 
-    def to_qiskit_signal_jax(self) -> Signal:
+    def to_qiskit_signal_jax(self) -> Signal: # type: ignore
+        if not QISKIT_AVAILABLE:
+            raise ImportError("Qiskit is not available. Please install qiskit and qiskit-dynamics.")
         if not JAX_AVAILABLE:
             raise RuntimeError("JAX not installed for to_qiskit_signal_jax")
 
