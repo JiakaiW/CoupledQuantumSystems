@@ -187,7 +187,7 @@ class CheckpointingJob:
         self.exp_ops = exp_ops
         self.len_t_segment_per_chunk = len_t_segment_per_chunk
 
-    def run_segment(self):
+    def run_segment(self,progress_meter):
         """Run a single evolution segment and handle checkpointing.
 
         This method:
@@ -227,7 +227,7 @@ class CheckpointingJob:
             exp_ops = self.exp_ops,
             method = self.method,
             options = dq.Options(
-                progress_meter = False,
+                progress_meter = progress_meter,
                 t0 = segment_t_save[0].item() # Converts from device array to regular float
             )
         )
