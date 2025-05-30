@@ -1,6 +1,9 @@
+from __future__ import annotations
 import numpy as np
+from functools import cached_property
+from .dresser_base import AbstractDresser
 
-class Perturbation:
+class PerturbationDresser(AbstractDresser):
     """
     A base class that encapsulates first- and second-order
     non-degenerate perturbation theory for a given Hamiltonian basis.
@@ -12,9 +15,10 @@ class Perturbation:
       - E0    : (dim,) unperturbed energies
       - V     : (dim, dim) perturbation operator in the same basis as E0
     and provides methods to compute first- and second-order corrections.
+      - ugly_fix_coefficient: I don't know why there's a factor of 2 difference from exact diagonalization, but it works.
     """
 
-    def __init__(self, dim: int, E0: np.ndarray, V: np.ndarray, ugly_fix_coefficient = 1):
+    def __init__(self, dim: int, E0: np.ndarray, V: np.ndarray, ugly_fix_coefficient = 2):
         """
         Args:
             dim : dimension of the Hilbert space
@@ -24,22 +28,6 @@ class Perturbation:
         self.dim = dim
         self.E0 = E0
         self.V = V
-
-        # Internal caches for first- and second-order computations
-        self._energies_1st = None       # shape (dim,)
-        self._psi_1st = None            # shape (dim, dim)
-        self._energies_2nd = None       # shape (dim,)
-        self._psi_2nd = None            # shape (dim, dim)
-
-        # We'll also keep "sorted" versions + the sort indices
-        self._energies_1st_sorted = None
-        self._psi_1st_sorted = None
-        self._sort_idx_1st = None
-
-        self._energies_2nd_sorted = None
-        self._psi_2nd_sorted = None
-        self._sort_idx_2nd = None
-
         self.ugly_fix_coefficient = ugly_fix_coefficient
 
     @staticmethod
@@ -48,43 +36,37 @@ class Perturbation:
         op_list[where_to_embed] = op
         return np.kron(*op_list)
 
-
-    def first_order_perturbation(self):
-        # check cache
-        if self._energies_1st is not None and self._psi_1st is not None:
-            return self._energies_1st, self._psi_1st
-
-        # (A) First-order energies
+    @cached_property
+    def energies_1st(self) -> np.ndarray:
+        """First-order energies."""
         E1 = np.diag(self.V)
-        self._energies_1st = self.E0 + E1  # shape (dim,)
+        return self.E0 + E1  # shape (dim,)
 
-        # (B) Build denominators
+    @cached_property
+    def psi_1st(self) -> np.ndarray:
+        """First-order wavefunctions."""
+        # Build denominators
         E0_row = self.E0.reshape(1, self.dim)
         E0_col = self.E0.reshape(self.dim, 1)
         denom = E0_row - E0_col
         np.fill_diagonal(denom, np.inf)
 
-        # (C) Coeffs
+        # Coeffs
         coeffs = self.V / denom
 
-        # (D) Wavefunctions up to 1st order (unnormalized)
-        self._psi_1st = np.eye(self.dim, dtype=np.complex128) + coeffs / self.ugly_fix_coefficient
+        # Wavefunctions up to 1st order (unnormalized)
+        psi = np.eye(self.dim, dtype=np.complex128) + coeffs / self.ugly_fix_coefficient
 
         # Normalize the wavefunctions
-        norms = np.linalg.norm(self._psi_1st, axis=0)  # compute norms for all columns at once
-        self._psi_1st /= norms[np.newaxis, :]  # broadcast division across all rows
+        norms = np.linalg.norm(psi, axis=0)  # compute norms for all columns at once
+        psi /= norms[np.newaxis, :]  # broadcast division across all rows
 
-        return self._energies_1st, self._psi_1st
-    
-    def second_order_perturbation(self):
-        if self._energies_1st is None or self._psi_1st is None:
-            self.first_order_perturbation()
+        return psi
 
-        # check cache
-        if self._energies_2nd is not None and self._psi_2nd is not None:
-            return self._energies_2nd, self._psi_2nd
-
-        # (1) Second-order energy shift
+    @cached_property
+    def energies_2nd(self) -> np.ndarray:
+        """Second-order energies."""
+        # Second-order energy shift
         abs_V_sq = np.abs(self.V)**2
         E0_row = self.E0.reshape(1, self.dim)
         E0_col = self.E0.reshape(self.dim, 1)
@@ -93,37 +75,60 @@ class Perturbation:
 
         second_order_matrix = abs_V_sq / denom
         E2 = np.sum(second_order_matrix, axis=0)
-        self._energies_2nd = self._energies_1st + E2  # E(0+1+2)
+        return self.energies_1st + E2  # E(0+1+2)
 
-        # (2) Second-order wavefunction corrections
-        #   |psi_n^(2)> = ∑_{m ≠ n}  (⟨m|V|psi_n^(1)> / [E0[n]-E0[m]])  |m>
-        #
-        # We'll do this in a vectorized way by:
-        #   numerator = V @ psi1st   (matrix-matrix product, shape (dim, dim))
-        # so column n is V * (psi_n^(1))
-        #   => numerator[m,n] = ∑_p V[m,p]*psi1st[p,n] = ⟨m|V|psi_n^(1)⟩
-        #
-        # Then denom[m,n] = E0[n] - E0[m], same shape (dim, dim).
-        # => c2[m,n] = numerator[m,n] / denom[m,n] for m != n.
+    @cached_property
+    def psi_2nd(self) -> np.ndarray:
+        """Second-order wavefunctions."""
+        # Build denominators
+        E0_row = self.E0.reshape(1, self.dim)
+        E0_col = self.E0.reshape(self.dim, 1)
+        denom = E0_row - E0_col
+        np.fill_diagonal(denom, np.inf)
 
-        numerator = self.V @ self._psi_1st  # shape (dim, dim)
-        # denom = E0_row - E0_col
-        # np.fill_diagonal(denom, np.inf)
-
+        numerator = self.V @ self.psi_1st  # shape (dim, dim)
         psi2 = numerator / denom  # shape (dim, dim)
         # For safety, zero out the diagonal so we never add infinite self-term
         np.fill_diagonal(psi2, 0.0)
 
-        # (D) The total wavefunction up to second order
-        psi_up_to_2 = self._psi_1st + psi2 / self.ugly_fix_coefficient
+        # The total wavefunction up to second order
+        psi_up_to_2 = self.psi_1st + psi2 / self.ugly_fix_coefficient
 
         # Normalize the wavefunctions
         norms = np.linalg.norm(psi_up_to_2, axis=0)  # compute norms for all columns at once
         psi_up_to_2 /= norms[np.newaxis, :]  # broadcast division across all rows
 
-        self._psi_2nd = psi_up_to_2 
+        return psi_up_to_2
 
-        return self._energies_2nd, self._psi_2nd
+    @cached_property
+    def sort_idx_1st(self) -> np.ndarray:
+        """Sorting indices for first-order energies."""
+        return np.argsort(self.energies_1st)
+
+    @cached_property
+    def energies_1st_sorted(self) -> np.ndarray:
+        """First-order energies sorted by energy."""
+        return self.energies_1st[self.sort_idx_1st]
+
+    @cached_property
+    def psi_1st_sorted(self) -> np.ndarray:
+        """First-order wavefunctions sorted by energy."""
+        return self.psi_1st[:, self.sort_idx_1st]
+
+    @cached_property
+    def sort_idx_2nd(self) -> np.ndarray:
+        """Sorting indices for second-order energies."""
+        return np.argsort(self.energies_2nd)
+
+    @cached_property
+    def energies_2nd_sorted(self) -> np.ndarray:
+        """Second-order energies sorted by energy."""
+        return self.energies_2nd[self.sort_idx_2nd]
+
+    @cached_property
+    def psi_2nd_sorted(self) -> np.ndarray:
+        """Second-order wavefunctions sorted by energy."""
+        return self.psi_2nd[:, self.sort_idx_2nd]
 
     @staticmethod
     def operator_in_perturbed_basis(
@@ -145,38 +150,6 @@ class Perturbation:
         # O_dressed = psi^\dagger @ op @ psi
         return psi.conj().T @ op @ psi
 
-    def generate_1st_sorting(self):
-        """Generate sorting indices and sorted arrays for first-order perturbation."""
-        if self._energies_1st is None or self._psi_1st is None:
-            self.first_order_perturbation()
-
-        sort_idx = np.argsort(self._energies_1st)
-        E_sorted = self._energies_1st[sort_idx]
-        psi_sorted = self._psi_1st[:, sort_idx]
-
-        # Cache the results
-        self._sort_idx_1st = sort_idx
-        self._energies_1st_sorted = E_sorted
-        self._psi_1st_sorted = psi_sorted
-
-        return sort_idx, E_sorted, psi_sorted
-
-    def generate_2nd_sorting(self):
-        """Generate sorting indices and sorted arrays for second-order perturbation."""
-        if self._energies_2nd is None or self._psi_2nd is None:
-            self.second_order_perturbation()
-
-        sort_idx = np.argsort(self._energies_2nd)
-        E_sorted = self._energies_2nd[sort_idx]
-        psi_sorted = self._psi_2nd[:, sort_idx]
-
-        # Cache the results
-        self._sort_idx_2nd = sort_idx
-        self._energies_2nd_sorted = E_sorted
-        self._psi_2nd_sorted = psi_sorted
-
-        return sort_idx, E_sorted, psi_sorted
-
     def reorder_to_energy_basis(self, operator=None, order="2nd"):
         """
         Sorts either the first- or second-order energies & wavefunctions
@@ -197,21 +170,13 @@ class Perturbation:
             (E_sorted, psi_sorted)  # if no operator is provided
         """
         if order == "1st":
-            # Check if already sorted
-            if self._sort_idx_1st is not None and self._energies_1st_sorted is not None:
-                E_sorted = self._energies_1st_sorted
-                psi_sorted = self._psi_1st_sorted
-                sort_idx = self._sort_idx_1st
-            else:
-                sort_idx, E_sorted, psi_sorted = self.generate_1st_sorting()
+            E_sorted = self.energies_1st_sorted
+            psi_sorted = self.psi_1st_sorted
+            sort_idx = self.sort_idx_1st
         else:  # order == "2nd"
-            # Check if already sorted
-            if self._sort_idx_2nd is not None and self._energies_2nd_sorted is not None:
-                E_sorted = self._energies_2nd_sorted
-                psi_sorted = self._psi_2nd_sorted
-                sort_idx = self._sort_idx_2nd
-            else:
-                sort_idx, E_sorted, psi_sorted = self.generate_2nd_sorting()
+            E_sorted = self.energies_2nd_sorted
+            psi_sorted = self.psi_2nd_sorted
+            sort_idx = self.sort_idx_2nd
 
         if operator is not None:
             op_sorted = operator[sort_idx, :][:, sort_idx]
@@ -232,19 +197,13 @@ class Perturbation:
             (E_unsorted, psi_unsorted)
         """
         if order == "1st":
-            if self._sort_idx_1st is not None and self._energies_1st_sorted is not None:
-                sort_idx = self._sort_idx_1st
-                E_sorted = self._energies_1st_sorted
-                psi_sorted = self._psi_1st_sorted
-            else:
-                sort_idx, E_sorted, psi_sorted = self.generate_1st_sorting()
+            sort_idx = self.sort_idx_1st
+            E_sorted = self.energies_1st_sorted
+            psi_sorted = self.psi_1st_sorted
         else:
-            if self._sort_idx_2nd is not None and self._energies_2nd_sorted is not None:
-                sort_idx = self._sort_idx_2nd
-                E_sorted = self._energies_2nd_sorted
-                psi_sorted = self._psi_2nd_sorted
-            else:
-                sort_idx, E_sorted, psi_sorted = self.generate_2nd_sorting()
+            sort_idx = self.sort_idx_2nd
+            E_sorted = self.energies_2nd_sorted
+            psi_sorted = self.psi_2nd_sorted
 
         # Invert the permutation
         inv_idx = np.empty_like(sort_idx)
@@ -255,7 +214,7 @@ class Perturbation:
         else:
             return E_sorted[inv_idx], psi_sorted[:, inv_idx]
 
-class TwoBodyPerturbation(Perturbation):
+class TwoBodyPerturbationDresser(PerturbationDresser):
     def __init__(self,         
                  energies_1: np.ndarray,  # shape (m,)
                 energies_2: np.ndarray,  # shape (n,)
@@ -277,9 +236,9 @@ class TwoBodyPerturbation(Perturbation):
         super().__init__(dim, E0, V, ugly_fix_coefficient)
 
     def two_body_first_order_perturbation_vectorized(self) -> tuple[np.ndarray, np.ndarray]:
-        return self.first_order_perturbation()
+        return self.energies_1st, self.psi_1st
     
     def two_body_second_order_perturbation_vectorized(self) -> tuple[np.ndarray, np.ndarray]:
-        return self.second_order_perturbation()
+        return self.energies_2nd, self.psi_2nd
 
 

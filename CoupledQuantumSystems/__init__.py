@@ -17,7 +17,7 @@ Example:
 from .systems import *
 from .dynamics import *
 from .utils import *
-
+from .perturb import *
 
 __version__ = '0.3'
 __author__ = 'Jiakai Wang'
