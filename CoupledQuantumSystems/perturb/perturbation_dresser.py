@@ -1,9 +1,9 @@
 from __future__ import annotations
 import numpy as np
 from functools import cached_property
-from .dresser_base import AbstractDresser
+from .energy_index import EnergyIndex
 
-class PerturbationDresser(AbstractDresser):
+class PerturbationDresser():
     """
     A base class that encapsulates first- and second-order
     non-degenerate perturbation theory for a given Hamiltonian basis.
@@ -25,16 +25,28 @@ class PerturbationDresser(AbstractDresser):
             E0  : shape (dim,), unperturbed energies in the chosen basis
             V   : shape (dim, dim), the perturbation matrix in that same basis
         """
-        self.dim = dim
+        super().__init__(dim=dim)
         self.E0 = E0
         self.V = V
         self.ugly_fix_coefficient = ugly_fix_coefficient
-
+    
     @staticmethod
     def embed_operator(op: np.ndarray, dims_list: list[int], where_to_embed: int) -> np.ndarray:
         op_list = [np.eye(dim, dtype=op.dtype) for dim in dims_list]
         op_list[where_to_embed] = op
         return np.kron(*op_list)
+
+    @staticmethod
+    def operator_in_perturbed_basis(
+            psi: np.ndarray,  # (dim, dim), columns = |psi_n^(perturbed)>
+            op: np.ndarray            # (dim, dim), operator in the original product basis
+        ) -> np.ndarray:
+        # Check shapes match
+        dim = psi.shape[0]
+        assert op.shape == (dim, dim), "Operator must match dimension of psi"
+        
+        # O_dressed = psi^\dagger @ op @ psi
+        return psi.conj().T @ op @ psi
 
     @cached_property
     def energies_1st(self) -> np.ndarray:
@@ -130,89 +142,37 @@ class PerturbationDresser(AbstractDresser):
         """Second-order wavefunctions sorted by energy."""
         return self.psi_2nd[:, self.sort_idx_2nd]
 
-    @staticmethod
-    def operator_in_perturbed_basis(
-            psi: np.ndarray,  # (dim, dim), columns = |psi_n^(perturbed)>
-            op: np.ndarray            # (dim, dim), operator in the original product basis
-        ) -> np.ndarray:
-        """
-        Compute the matrix elements of `op` in the basis spanned by
-        the columns of `psi`. 
-        (No normalization or re-orthonormalization is performed.)
+    @cached_property
+    def energy_idx_1st(self) -> EnergyIndex:
+        return EnergyIndex(self.energies_1st_sorted, self.psi_1st_sorted, self.sort_idx_1st, self.dim)
+    
+    @cached_property
+    def energy_idx_2nd(self) -> EnergyIndex:
+        return EnergyIndex(self.energies_2nd_sorted, self.psi_2nd_sorted, self.sort_idx_2nd, self.dim)
 
-        Returns:
-            op_dressed: (dim, dim) array = psi^\dagger @ op @ psi
-        """
-        # Check shapes match
-        dim = psi.shape[0]
-        assert op.shape == (dim, dim), "Operator must match dimension of psi"
-        
-        # O_dressed = psi^\dagger @ op @ psi
-        return psi.conj().T @ op @ psi
-
-    def reorder_to_energy_basis(self, operator=None, order="2nd"):
-        """
-        Sorts either the first- or second-order energies & wavefunctions
-        by ascending energy, and caches the sorted versions plus the sort index.
-
-        If operator is provided (dim x dim), it is also reordered (rows & columns)
-        in the same way (energy basis). The returned 'op_sorted' corresponds
-        to re-labeling basis states in ascending-energy order.
-
-        Args:
-            order    : "1st" or "2nd" (which cached results to reorder)
-            operator : optional (dim, dim) matrix in product basis.
-                       If given, we reorder it to match the energy basis ordering.
-
-        Returns:
-            op_sorted  # if operator is provided
-            or
-            (E_sorted, psi_sorted)  # if no operator is provided
-        """
+    def reorder_to_energy_basis(self, order="2nd"):
         if order == "1st":
-            E_sorted = self.energies_1st_sorted
-            psi_sorted = self.psi_1st_sorted
-            sort_idx = self.sort_idx_1st
+            return self.energy_idx_1st.reorder_to_energy_basis()
         else:  # order == "2nd"
-            E_sorted = self.energies_2nd_sorted
-            psi_sorted = self.psi_2nd_sorted
-            sort_idx = self.sort_idx_2nd
+            return self.energy_idx_2nd.reorder_to_energy_basis()
 
-        if operator is not None:
-            op_sorted = operator[sort_idx, :][:, sort_idx]
-            return E_sorted, psi_sorted, op_sorted
-        else:
-            return E_sorted, psi_sorted
-
-    def reorder_to_product_basis(self, operator=None, order="2nd"):
-        """
-        Undo the ascending-energy ordering. We use the cached _sort_idx to invert the reordering.
-
-        If operator is provided, we also reorder its rows & columns from the
-        energy basis back to the original product basis labeling.
-
-        Returns:
-            op_unsorted  # if operator is provided
-            or
-            (E_unsorted, psi_unsorted)
-        """
+    def reorder_op_to_energy_basis(self, operator: np.ndarray, order="2nd"):
         if order == "1st":
-            sort_idx = self.sort_idx_1st
-            E_sorted = self.energies_1st_sorted
-            psi_sorted = self.psi_1st_sorted
-        else:
-            sort_idx = self.sort_idx_2nd
-            E_sorted = self.energies_2nd_sorted
-            psi_sorted = self.psi_2nd_sorted
+            return self.energy_idx_1st.reorder_op_to_energy_basis(operator)
+        else:  # order == "2nd"
+            return self.energy_idx_2nd.reorder_op_to_energy_basis(operator)
 
-        # Invert the permutation
-        inv_idx = np.empty_like(sort_idx)
-        inv_idx[sort_idx] = np.arange(self.dim)
-
-        if operator is not None:
-            return operator[inv_idx, :][:, inv_idx]
+    def reorder_to_product_basis(self, order="2nd"):
+        if order == "1st":
+            return self.energy_idx_1st.reorder_to_product_basis()
         else:
-            return E_sorted[inv_idx], psi_sorted[:, inv_idx]
+            return self.energy_idx_2nd.reorder_to_product_basis()
+
+    def reorder_op_to_product_basis(self, operator: np.ndarray, order="2nd"):
+        if order == "1st":
+            return self.energy_idx_1st.reorder_op_to_product_basis(operator)
+        else:
+            return self.energy_idx_2nd.reorder_op_to_product_basis(operator)
 
 class TwoBodyPerturbationDresser(PerturbationDresser):
     def __init__(self,         
@@ -235,10 +195,10 @@ class TwoBodyPerturbationDresser(PerturbationDresser):
         V = g * np.kron(n_op_1, n_op_2)  # shape (dim, dim)
         super().__init__(dim, E0, V, ugly_fix_coefficient)
 
-    def two_body_first_order_perturbation_vectorized(self) -> tuple[np.ndarray, np.ndarray]:
+    def two_body_first_order_perturbation(self) -> tuple[np.ndarray, np.ndarray]:
         return self.energies_1st, self.psi_1st
     
-    def two_body_second_order_perturbation_vectorized(self) -> tuple[np.ndarray, np.ndarray]:
+    def two_body_second_order_perturbation(self) -> tuple[np.ndarray, np.ndarray]:
         return self.energies_2nd, self.psi_2nd
 
 
