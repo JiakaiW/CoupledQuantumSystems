@@ -19,28 +19,44 @@ def bch_expand(S: np.ndarray, O: np.ndarray, order: int) -> np.ndarray:
     return O_dressed
 
 # build Schrieffer–Wolff generator -----------------------------------
-def sw_generator(evals: np.ndarray, operator: np.ndarray) -> np.ndarray:
+def sw_generator(evals: np.ndarray, 
+                 operator: np.ndarray,
+                 omega: float | None = None) -> np.ndarray:
     '''
     Constructs the Schrieffer-Wolff generator matrix `S` (skew-Hermitian).
-    This matrix is used in a similarity transformation e^S H e^{-S} to decouple
-    or perturbatively treat off-diagonal couplings in a Hamiltonian.
+    This matrix is used in a similarity transformation e^S H e^{-S} to decouple or perturbatively treat off-diagonal couplings in a Hamiltonian.
     The generator S is constructed to first order in the coupling operator.
 
     The elements of S are given by S_mn = V_mn / (2 * (E_m - E_n)) for m != n,
     and S_mm = 0. Here, V is the 'operator' and E are the 'evals'.
 
     Inputs:
-    * `evals`: 1D NumPy array of unperturbed eigenvalues (E_m).
-    * `operator`: 2D NumPy array representing the coupling operator (V_mn).
-                 Typically, this is the off-diagonal part of the Hamiltonian
-                 in the basis where H0 (diagonal with `evals`) is diagonal.
-    
+    * `evals`: (dim,) ndarray
+        Bare eigen-energies E_m of H₀.
+    * `operator`: (dim, dim) ndarray
+        Off-diagonal coupling V^{(ℓ)} that oscillates at drive
+        frequency ω_ℓ (pump, Stokes, …).
+    * `omega`: float or None
+        Drive frequency ω_ℓ.  If None, denominators are E_m−E_n,
+        i.e. the matrix is already in the rotating frame.
+
     Returns:
-    * `S`: 2D NumPy array, the skew-Hermitian generator matrix.
+    * `S`: (dim, dim) ndarray
+        Generator with elements
+
+            S_mn = V_mn / [2 (E_m − E_n − ℏ ω_ℓ)],   m ≠ n
+            S_mm = 0,   S† = −S.
     
-    The function identifies significant couplings (abs(operator[m,n]) > 1e-10)
-    in the upper triangle (m < n), computes the corresponding S_mn factor,
-    and sets S_nm = -conj(S_mn). Diagonal elements of S are zero.
+    Usage
+    -----
+    1.  Build one S^{(ℓ)} per microwave tone.
+    2.  Add them:   S_tot = Σ_ℓ S^{(ℓ)}.
+    3.  Pass S_tot to `bch_expand( S_tot, O_bare, order )`
+        with order = 1, 2, … as desired.
+
+    Cross-tone (pump×Stokes) effects enter automatically via the
+    nested commutators in the BCH expansion; no extra terms are needed
+    in S_tot when going to second order.
     '''
     dim = operator.shape[0]
     if not (evals.shape == (dim,) and operator.shape == (dim, dim)):
@@ -61,6 +77,8 @@ def sw_generator(evals: np.ndarray, operator: np.ndarray) -> np.ndarray:
     op_mn = operator[m_indices, n_indices].astype(complex)
     # Ensure evals are float for delta_mn to avoid type issues if evals are int
     delta_mn = evals[m_indices].astype(float) - evals[n_indices].astype(float)
+    if omega is not None:
+        delta_mn = delta_mn - omega
 
     # Mask for significant couplings
     significant_mask = np.abs(op_mn) > 1e-10
@@ -86,32 +104,3 @@ def sw_generator(evals: np.ndarray, operator: np.ndarray) -> np.ndarray:
     S[n_sig, m_sig] = -np.conj(factors_sig) # Ensures S is skew-Hermitian
     
     return S
-
-class BCHDresser():
-    def __init__(self, bare_ops: dict[str, np.ndarray], order: int = 2):
-        dim = next(iter(bare_ops.values())).shape[0]
-        super().__init__(dim=dim)
-        if order < 1:
-            raise ValueError("order must be ≥ 1")
-        self.order     = order
-        self.bare_ops  = bare_ops          # e.g. {"n_t": n_t, "n_f": n_f}
-
-    # ----------------------------------------------------------
-    def _generator(self, evals: np.ndarray, operator: np.ndarray) -> np.ndarray:
-        # The sw_generator function itself will validate shapes.
-        # self.dim (from BCHDresser.__init__) could be used for additional assertions here if desired:
-        # e.g. assert evals.shape[0] == self.dim and operator.shape == (self.dim, self.dim)
-        return sw_generator(evals, operator)
-
-    def dress_operator(
-        self,
-        M_bare: np.ndarray,
-        *,
-        evals: np.ndarray,             # Parameter changed from Omega
-        operator: np.ndarray,          # Parameter changed from Delta
-        projector: np.ndarray | None = None,
-        **_,
-    ) -> np.ndarray:
-        S = self._generator(evals, operator) # Call updated
-        M_dressed = bch_expand(S, M_bare, self.order)
-        return M_dressed if projector is None else projector @ M_dressed @ projector

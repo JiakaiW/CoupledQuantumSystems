@@ -124,6 +124,39 @@ class DriveTerm:
             phase=self.phi,
             name=self.pulse_id
         )
+from scipy.interpolate import CubicSpline
+def interp_envelope(t, args, *, math=np):
+    """
+    Linear interpolation of a sampled envelope.
+
+    Required keys in `args`
+    -----------------------
+    t_samples : 1-D array_like (monotonically increasing)
+    amp_samples : 1-D array_like (same length as t_samples)
+    outside : {"hold", "zero"}, optional
+        How to treat t outside the sampled window.
+        * "hold"  –  clamp to the first/last sample (np.interp default)
+        * "zero"  –  return 0 outside the window
+    """
+    t_s = args["t_samples"]
+    a_s = args["amp_samples"]
+    mode = args.get("outside", "zero")
+
+    y = math.interp(t, t_s, a_s)
+
+    if mode == "zero":
+        # mask out-of-range points
+        y = math.where((t < t_s[0]) | (t > t_s[-1]), 0.0, y)
+
+    return y
+
+def interp_envelope_with_spline(t, args, *, math=np):
+    spline = args["spline"]
+    t_tot = args["t_tot"]
+    y = spline(t)
+    y = math.where(t>t_tot,0,y)
+    return y
+
 
 def square_pulse_with_rise_fall_envelope(t,
                                 args = {}, math=np):
