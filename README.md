@@ -1,4 +1,4 @@
-# CoupledQuantumSystems
+# CoupledQuantumSystems-The Pytorch lightening for hamiltonian simulation
 
 ![gpu_meme](assets/gpu_meme.jpg)
 
