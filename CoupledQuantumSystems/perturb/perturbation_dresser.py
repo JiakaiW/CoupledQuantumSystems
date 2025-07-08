@@ -25,7 +25,7 @@ class PerturbationDresser():
             E0  : shape (dim,), unperturbed energies in the chosen basis
             V   : shape (dim, dim), the perturbation matrix in that same basis
         """
-        super().__init__(dim=dim)
+        self.dim = dim
         self.E0 = E0
         self.V = V
         self.ugly_fix_coefficient = ugly_fix_coefficient
