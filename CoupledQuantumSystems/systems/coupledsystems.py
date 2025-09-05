@@ -188,7 +188,11 @@ class CoupledSystem(QuantumSystem):
         """
         if update_products_to_keep:
             self.set_new_product_to_keep(products_to_keep)
-            self.set_new_operators_after_setting_new_product_to_keep()
+            if hasattr(self, 'set_new_operators_after_setting_new_product_to_keep') and callable(getattr(self, 'set_new_operators_after_setting_new_product_to_keep')):
+                self.set_new_operators_after_setting_new_product_to_keep()
+            else:
+                assert products_to_keep is None or products_to_keep == [], "products_to_keep is not None or [], in this case, set_new_operators_after_setting_new_product_to_keep must be implemented, however it is not implemented"
+
         
         if num_processes is None:
             num_processes = multiprocessing.cpu_count()
