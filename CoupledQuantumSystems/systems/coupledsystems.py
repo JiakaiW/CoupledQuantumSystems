@@ -191,7 +191,7 @@ class CoupledSystem(QuantumSystem):
             if hasattr(self, 'set_new_operators_after_setting_new_product_to_keep') and callable(getattr(self, 'set_new_operators_after_setting_new_product_to_keep')):
                 self.set_new_operators_after_setting_new_product_to_keep()
             else:
-                assert products_to_keep is None or products_to_keep == [], "products_to_keep is not None or [], in this case, set_new_operators_after_setting_new_product_to_keep must be implemented, however it is not implemented"
+                assert products_to_keep is None or products_to_keep == [] or products_to_keep == self.products_to_keep, "products_to_keep is not None or [] or self.products_to_keep, in this case, set_new_operators_after_setting_new_product_to_keep must be implemented because products_to_keep have been changed, however it is not implemented"
 
         
         if num_processes is None:
