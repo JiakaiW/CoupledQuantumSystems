@@ -31,6 +31,8 @@ dependencies = [
     "loky>=3.4",
     "bidict>=0.22",
     "rich>=13",
+    "shapely",
+    "scikit-learn",
 ]
 
 [project.optional-dependencies]  # ---- extras --------------------------------
