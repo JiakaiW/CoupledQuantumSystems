@@ -218,7 +218,7 @@ class CheckpointingJob:
             return _H
 
         H =  dq.timecallable(_H, discontinuity_ts = None)
-        print(f"starting from t_idx = {segment_t_save[0].item()}, ending at t_idx = {segment_t_save[-1].item()}")
+        print(f"starting from t value = {segment_t_save[0].item()}, ending at t value = {segment_t_save[-1].item()}")
         segment_result = dq.mesolve(
             H = H,
             rho0 = self.rho0 if self.first_segment else dq.asqarray(self.checkpoint.qt_result.states[-1]),
