@@ -126,7 +126,7 @@ class DriveTerm:
         )
 
 def generate_fourier_odd_samples(params, t_gate, n_output, 
-            # damping=0.5, 
+            damping=0.5, 
             apply_arctan=True):
     """
     Generate pre-computed samples for discrete version.
@@ -167,9 +167,9 @@ def generate_fourier_odd_samples(params, t_gate, n_output,
     for i, amplitude in enumerate(bounded_params):
         k = 2 * i + 1  # Odd harmonic: 1, 3, 5, ...
         
-        # # Apply damping
-        # damping_factor = np.exp(-damping * k / (2 * n_params))
-        # amplitude = amplitude * damping_factor
+        # Apply damping
+        damping_factor = np.exp(-damping * k / (2 * n_params))
+        amplitude = amplitude * damping_factor
         
         # Add harmonic contribution
         amp_samples += amplitude * np.sin(k * np.pi * t_norm)
@@ -244,7 +244,7 @@ def fourier_odd_harmonics_continuous(t, args, *, math=np):
     """
     params = args["params"]
     t_gate = args["t_gate"]
-    # damping = args.get("damping", 0.5)
+    damping = args.get("damping", 0.5)
     apply_arctan = args.get("apply_arctan", True)
     
     # Bound parameters if requested
@@ -265,9 +265,9 @@ def fourier_odd_harmonics_continuous(t, args, *, math=np):
         k = 2 * i + 1  # Odd harmonic number: 1, 3, 5, ...
         amplitude = bounded_params[i]
         
-        # # Apply exponential damping
-        # damping_factor = math.exp(-damping * k / (2 * n_params))
-        # amplitude = amplitude * damping_factor
+        # Apply exponential damping
+        damping_factor = math.exp(-damping * k / (2 * n_params))
+        amplitude = amplitude * damping_factor
         
         # Add harmonic: A_k * exp(-λk) * sin(kπt/T)
         result = result + amplitude * math.sin(k * math.pi * t_norm)
