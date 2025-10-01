@@ -124,6 +124,58 @@ class DriveTerm:
             phase=self.phi,
             name=self.pulse_id
         )
+
+def generate_fourier_odd_samples(params, t_gate, n_output, 
+            # damping=0.5, 
+            apply_arctan=True):
+    """
+    Generate pre-computed samples for discrete version.
+    
+    Args:
+        params: 1-D array of harmonic amplitudes (length N)
+        t_gate: Total pulse duration
+        n_output: Number of time samples to generate
+        damping: Exponential damping factor (default=0.5)
+        apply_arctan: If True, bound params to [-1,1] (default=True)
+    
+    Returns:
+        t_samples: 1-D array of time points (length n_output)
+        amp_samples: 1-D array of pulse amplitudes (length n_output)
+    
+    Example:
+        params = np.random.randn(15)
+        t_samples, amp_samples = generate_fourier_odd_samples(
+            params, t_gate=100.0, n_output=1000, damping=0.5
+        )
+    """
+    # Bound parameters if requested
+    if apply_arctan:
+        bounded_params = np.arctan(params) / (np.pi / 2)
+    else:
+        bounded_params = params
+    
+    n_params = len(bounded_params)
+    
+    # Generate time points
+    t_samples = np.linspace(0, t_gate, n_output)
+    t_norm = t_samples / t_gate
+    
+    # Initialize amplitude array
+    amp_samples = np.zeros(n_output)
+    
+    # Sum odd harmonics
+    for i, amplitude in enumerate(bounded_params):
+        k = 2 * i + 1  # Odd harmonic: 1, 3, 5, ...
+        
+        # # Apply damping
+        # damping_factor = np.exp(-damping * k / (2 * n_params))
+        # amplitude = amplitude * damping_factor
+        
+        # Add harmonic contribution
+        amp_samples += amplitude * np.sin(k * np.pi * t_norm)
+    
+    return t_samples, amp_samples
+
 from scipy.interpolate import CubicSpline
 def interp_envelope(t, args, *, math=np):
     """
@@ -156,6 +208,74 @@ def interp_envelope_with_spline(t, args, *, math=np):
     y = spline(t)
     y = math.where(t>t_tot,0,y)
     return y
+
+def fourier_odd_harmonics_continuous(t, args, *, math=np):
+    """
+    Continuous version: Analytical computation of harmonic sum.
+    Direct evaluation, slower but exact.
+    
+    Required keys in `args`:
+    -----------------------
+    params : 1-D array (harmonic amplitudes for odd harmonics)
+             params[0] → harmonic 1 (sin(1πt/T))
+             params[1] → harmonic 3 (sin(3πt/T))
+             params[k] → harmonic (2k+1)
+    t_gate : float (total pulse duration)
+    damping : float, optional (exponential damping factor, default=0.5)
+    apply_arctan : bool, optional (if True, bound params to [-1,1], default=True)
+    
+    Example usage:
+    --------------
+    params = np.array([1.0, 0.5, -0.3, ...])  # 15 harmonic amplitudes
+    
+    drive = DriveTerm(
+        driven_op=sigmay(),
+        pulse_shape_func=fourier_odd_harmonics_continuous,
+        pulse_shape_args={
+            'params': params,
+            't_gate': 100.0,
+            # 'damping': 0.5,
+            'apply_arctan': True
+        },
+        modulation_freq=5.0,
+        phi=0.0,
+        pulse_id='qubit_drive'
+    )
+    """
+    params = args["params"]
+    t_gate = args["t_gate"]
+    # damping = args.get("damping", 0.5)
+    apply_arctan = args.get("apply_arctan", True)
+    
+    # Bound parameters if requested
+    if apply_arctan:
+        bounded_params = math.arctan(params) / (math.pi / 2)
+    else:
+        bounded_params = params
+    
+    n_params = len(bounded_params)
+    
+    # Normalize time to [0, 1]
+    t_norm = t / t_gate
+    
+    # Compute sum of odd harmonics
+    result = math.zeros_like(t)
+    
+    for i in range(n_params):
+        k = 2 * i + 1  # Odd harmonic number: 1, 3, 5, ...
+        amplitude = bounded_params[i]
+        
+        # # Apply exponential damping
+        # damping_factor = math.exp(-damping * k / (2 * n_params))
+        # amplitude = amplitude * damping_factor
+        
+        # Add harmonic: A_k * exp(-λk) * sin(kπt/T)
+        result = result + amplitude * math.sin(k * math.pi * t_norm)
+    
+    # Zero outside [0, t_gate]
+    result = math.where((t >= 0) & (t <= t_gate), result, 0.0)
+    
+    return result
 
 
 def square_pulse_with_rise_fall_envelope(t,
